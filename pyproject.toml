@@ -11,4 +11,8 @@ dependencies = [
     "pyproj>=3.7.1",
     "requests>=2.32.4",
     "shapely>=2.1.1",
+    "wetterdienst>=0.109.0",
+    "pandas>=2.0.0",
+    "polars>=0.20.0",
+    "scipy>=1.16.0",
 ]

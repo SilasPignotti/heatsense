@@ -60,6 +60,26 @@ DEFAULT_OUTPUT_FORMAT = "geojson"
 DEFAULT_OUTPUT_CRS = "4326"  # WGS84
 DEFAULT_INPUT_CRS = "3857"   # Web Mercator
 
+# =============================================================================
+# DWD Weather Service Configuration
+# =============================================================================
+
+# DWD Settings für wetterdienst
+DWD_SETTINGS = {
+    "ts_shape": "long",  # Tidy data format
+    "ts_humanize": True,  # Benutzerfreundliche Parameternamen
+    "ts_convert_units": True,  # Einheiten in SI umrechnen
+}
+
+# Temperaturparameter für DWD-Abfragen
+DWD_TEMPERATURE_PARAMETERS = [("hourly", "temperature_air", "temperature_air_mean_2m")]
+
+# Interpolation und Buffer-Konfiguration
+DWD_BUFFER_DISTANCE = 5000  # Buffer-Distanz in Metern um die Geometrie zu erweitern
+DWD_INTERPOLATION_RESOLUTION = 30  # Auflösung des Interpolationsrasters in Metern
+DWD_INTERPOLATION_METHOD = "linear"  # Interpolationsmethode ('linear', 'nearest', 'cubic')
+DWD_INTERPOLATE_BY_DEFAULT = True  # Standardmäßig Interpolation durchführen
+
 def get_closest_corine_year(target_year: int) -> int:
     """
     Findet das nächstgelegene verfügbare Corine-Jahr.
