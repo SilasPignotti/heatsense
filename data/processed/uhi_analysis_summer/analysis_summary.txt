@@ -1,0 +1,15 @@
+Urban Heat Island Analysis Summary
+========================================
+
+Date range: 2022-06-01 to 2022-08-31
+Cloud threshold: 15.0%
+Grid cell size: 100m
+Hotspot threshold: 0.9
+
+Analysis completed using existing weather data:
+- City boundary: data/raw/boundaries/berlin_admin_boundaries.geojson
+- Land use data: data/raw/landcover/berlin_corine_landcover.geojson
+- Weather data: data/processed/weather/berlin_temperature_20220101_to_20221231_interpolated.geojson
+
+Note: This is a demonstration run using existing data.
+For full satellite-based analysis, Earth Engine authentication is required.

@@ -84,9 +84,20 @@ class CorineDataDownloader:
                 # YYYY format
                 if len(date_input) == 4 and date_input.isdigit():
                     return int(date_input)
-                # YYYY-MM-DD format
+                # YYYY-MM-DD or YYYY-MM format
                 elif '-' in date_input:
-                    return int(date_input.split('-')[0])
+                    # Try YYYY-MM-DD
+                    try:
+                        dt = datetime.strptime(date_input, "%Y-%m-%d")
+                        return dt.year
+                    except ValueError:
+                        pass
+                    # Try YYYY-MM
+                    try:
+                        dt = datetime.strptime(date_input, "%Y-%m")
+                        return dt.year
+                    except ValueError:
+                        raise ValueError(f"Unknown or invalid date format: {date_input}")
                 else:
                     raise ValueError(f"Unknown date format: {date_input}")
             except Exception as e:
