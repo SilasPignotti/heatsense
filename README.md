@@ -1,160 +1,235 @@
 # Urban Heat Island Analyzer
 
-Ein Python-basiertes Tool zur Analyse von Urban Heat Island Effekten in Berlin.
+Ein Python-basiertes System zur Analyse von Urban Heat Islands (UHI) basierend auf Wetterdaten, Landnutzung und geografischen Grenzen.
 
-## Projektstruktur
+## 🏗️ Projektstruktur
 
 ```
 urban_heat_island_analyzer/
-├── src/
-│   └── uhi_analyzer/              # Hauptpaket
-│       ├── __init__.py
-│       ├── config/                # Konsolidierte Konfiguration
-│       │   ├── __init__.py
-│       │   ├── settings.py        # Alle Einstellungen und Konstanten
-│       │   ├── credentials.py     # API-Schlüssel und Credentials
-│       │   └── copernicus_api_key.json
-│       ├── data/                  # Datenverarbeitung
-│       │   ├── __init__.py
-│       │   ├── wfs_downloader.py
-│       │   └── corine_downloader.py  # Corine Land Cover Downloader
-│       ├── analysis/              # Analyse-Module
-│       │   └── __init__.py
-│       ├── utils/                 # Hilfsfunktionen
-│       │   └── __init__.py
-│       ├── visualization/         # Visualisierung
-│       │   └── __init__.py
-│       └── webapp/                # Web-Anwendung
-│           └── __init__.py
-├── scripts/                       # Konsolidierte Scripts
-│   └── data_processing/
-│       ├── download_berlin_boundaries.py
-│       └── download_corine_landcover.py
-├── notebooks/                     # Jupyter Notebooks
-├── data/                          # Vereinfachte Datenstruktur
-│   ├── raw/                       # Rohdaten
-│   │   ├── boundaries/
-│   │   └── landcover/
+├── data/                          # Datenverzeichnis
 │   ├── processed/                 # Verarbeitete Daten
-│   └── external/                  # Externe Daten
-├── results/                       # Ergebnisse
-│   ├── figures/
-│   ├── maps/
-│   └── reports/
-├── tests/                         # Tests
-│   ├── integration/
-│   │   └── test_corine_years.py   # Integrationstests für Corine-Jahre
-│   └── unit/
-├── docs/                          # Dokumentation
-│   ├── corine_downloader.md       # CorineDownloader-Dokumentation
-│   └── wfs_downloader.md          # WFSDownloader-Dokumentation
-├── logs/                          # Log-Dateien
-├── pyproject.toml                 # Projekt-Konfiguration
-└── README.md
+│   │   ├── weather/              # Wetterdaten
+│   │   └── uhi_analysis/         # UHI-Analyseergebnisse
+│   └── raw/                      # Rohdaten
+│       ├── boundaries/           # Verwaltungsgrenzen
+│       └── landcover/            # Landnutzungsdaten
+├── docs/                         # Dokumentation
+│   ├── corine_downloader.md       # CorineDataDownloader-Dokumentation
+│   ├── dwd_downloader.md          # DWDDataDownloader-Dokumentation
+│   └── wfs_downloader.md          # WFSDataDownloader-Dokumentation
+├── logs/                         # Log-Dateien
+├── scripts/                      # Ausführbare Scripts
+│   └── data_processing/          # Datenverarbeitung
+│       ├── download_berlin_boundaries.py
+│       ├── download_berlin_weather_data.py
+│       ├── download_corine_landcover.py
+│       └── analyze_heat_islands.py
+├── src/                          # Quellcode
+│   └── uhi_analyzer/             # Hauptpaket
+│       ├── config/               # Konfiguration
+│       ├── data/                 # Datenmodule
+│       │   ├── corine_downloader.py
+│       │   ├── dwd_downloader.py
+│       │   ├── wfs_downloader.py
+│       │   └── urban_heat_island_analyzer.py
+│       ├── utils/                # Hilfsfunktionen
+│       ├── visualization/        # Visualisierung
+│       └── webapp/               # Web-Anwendung
+├── tests/                        # Tests
+│   ├── integration/              # Integrationstests
+│   └── unit/                     # Unit-Tests
+├── pyproject.toml                # Projekt-Konfiguration
+├── uv.lock                       # Dependency-Lock
+└── README.md                     # Diese Datei
 ```
 
-## Hauptverbesserungen
+## 🚀 Schnellstart
 
-### ✅ Konsolidierte Konfiguration
-- **Alle Einstellungen** in `src/uhi_analyzer/config/settings.py`
-- **API-Credentials** in `src/uhi_analyzer/config/credentials.py`
-- **Keine doppelten Config-Ordner** mehr
-
-### ✅ Vereinfachte Struktur
-- **Entfernte unnötige Ordner**: `api/`, `config/` (Root-Level)
-- **Konsolidierte Scripts**: Nur noch `scripts/data_processing/`
-- **Saubere Notebooks**: Direkt in `notebooks/`
-
-### ✅ Bessere Organisation
-- **Klare Trennung** zwischen Code (`src/`) und Daten (`data/`)
-- **Zentrale Konfiguration** im Hauptpaket
-- **Vereinfachte Imports** durch konsolidierte Module
-
-### ✅ Mehrjährige Corine-Unterstützung
-- **Unterstützung für Jahre**: 1990, 2000, 2006, 2012, 2018
-- **Automatische Jahr-Auswahl**: Wählt nächstgelegenes verfügbares Jahr
-- **Rückwärtskompatibilität**: Bestehende Skripte funktionieren weiterhin
-
-## Installation
+### Installation
 
 ```bash
-# Mit uv (empfohlen)
+# Repository klonen
+git clone <repository-url>
+cd urban_heat_island_analyzer
+
+# Dependencies installieren (mit uv)
 uv sync
-uv run python -m uhi_analyzer
-
-# Oder mit pip
-pip install -e .
-```
-
-## Verwendung
-
-### Daten herunterladen
-
-```bash
-# Berliner Verwaltungsgrenzen
-uv run python scripts/data_processing/download_berlin_boundaries.py
-
-# Corine Land Cover Daten (Standard: 2018)
-uv run python scripts/data_processing/download_corine_landcover.py
-
-# Corine Land Cover Daten für spezifisches Jahr
-uv run python scripts/data_processing/download_corine_landcover.py --year 2012
-
-# Corine Land Cover Daten mit automatischer Jahr-Auswahl
-uv run python scripts/data_processing/download_corine_landcover.py --year 2015  # Wählt 2012
-```
-
-### CorineDownloader mit verschiedenen Jahren
-
-```python
-from uhi_analyzer.data.corine_downloader import CorineDownloader
-
-# Standard: 2018
-downloader = CorineDownloader()
-
-# Spezifisches Jahr
-downloader = CorineDownloader(target_year=2012)
-
-# Automatische Auswahl des nächstgelegenen Jahres
-downloader = CorineDownloader(target_year=2015)  # Wählt 2012
-
-print(f"Verwendetes Jahr: {downloader.year}")
 ```
 
 ### Konfiguration
 
-Alle Einstellungen sind in `src/uhi_analyzer/config/settings.py` zentralisiert:
+1. **Umgebungsvariablen setzen** (optional):
+   ```bash
+   export DWD_BUFFER_DISTANCE=5000
+   export DWD_INTERPOLATION_RESOLUTION=1000
+   ```
+
+2. **Logging konfigurieren**:
+   ```bash
+   mkdir -p logs
+   ```
+
+### Daten herunterladen
+
+#### 1. Berliner Verwaltungsgrenzen
+```bash
+uv run scripts/data_processing/download_berlin_boundaries.py
+```
+
+#### 2. Wetterdaten für Berlin
+```bash
+uv run scripts/data_processing/download_berlin_weather_data.py --date 2024-06-15
+```
+
+#### 3. Corine Land Cover Daten
+```bash
+uv run scripts/data_processing/download_corine_landcover.py --year 2018
+```
+
+#### 4. Urban Heat Island Analyse
+```bash
+uv run scripts/data_processing/analyze_heat_islands.py \
+  --start-date 2023-07-01 \
+  --end-date 2023-07-31 \
+  --cloud-threshold 15
+```
+
+## 📊 Datenmodule
+
+### UrbanHeatIslandAnalyzer - Satellitenbasierte UHI-Analyse
 
 ```python
-from uhi_analyzer.config import WFS_ENDPOINTS, CORINE_BASE_URLS, CORINE_YEARS
+from uhi_analyzer import UrbanHeatIslandAnalyzer
+from datetime import date
 
-# WFS-Konfiguration
-print(WFS_ENDPOINTS["berlin_admin_boundaries"])
+# Analyzer initialisieren
+analyzer = UrbanHeatIslandAnalyzer(cloud_cover_threshold=20)
 
-# Corine-Konfiguration für alle Jahre
-print(CORINE_YEARS)  # [1990, 2000, 2006, 2012, 2018]
-print(CORINE_BASE_URLS[2012])  # URL für 2012
+# UHI-Analyse durchführen
+results = analyzer.analyze_heat_islands(
+    city_boundary="data/raw/boundaries/berlin_admin_boundaries.geojson",
+    date_range=(date(2023, 7, 1), date(2023, 7, 31)),
+    landuse_data="data/raw/landcover/berlin_corine_landcover_2018.geojson"
+)
+
+# Ergebnisse visualisieren
+analyzer.visualize_results(results, "uhi_analysis_results.png")
+
+# Empfehlungen anzeigen
+for rec in results['mitigation_recommendations']:
+    print(f"{rec['type']}: {rec['description']}")
 ```
 
-## Entwicklung
+### DWDDataDownloader mit verschiedenen Zeitpunkten
 
-Das Projekt folgt modernen Python-Best-Practices:
+```python
+from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
+from datetime import datetime
 
-- **Type Hints** für bessere Code-Qualität
-- **Modulare Struktur** für einfache Wartung
-- **Zentrale Konfiguration** für einfache Anpassungen
-- **Klare Trennung** von Code, Daten und Konfiguration
+# Service initialisieren
+service = DWDDataDownloader(buffer_distance=5000, interpolation_method="linear")
 
-### Testen der Corine-Funktionalität
+# Daten für spezifischen Zeitpunkt abrufen
+timestamp = datetime(2024, 6, 15, 14, 0, 0)  # 15. Juni 2024, 14:00 Uhr
+weather_data = service.get_weather_data(
+    geometry="path/to/berlin.geojson",
+    timestamp=timestamp,
+    interpolate=True,
+    resolution=1000
+)
+```
+
+### CorineDataDownloader mit verschiedenen Jahren
+
+```python
+from uhi_analyzer.data.corine_downloader import CorineDataDownloader
+
+# Standard (2018)
+downloader = CorineDataDownloader()
+
+# Spezifisches Jahr
+downloader = CorineDataDownloader(target_year=2012)
+
+# Automatische Jahr-Auswahl
+downloader = CorineDataDownloader(target_year=2015)  # Wählt 2012
+```
+
+### WFSDataDownloader für verschiedene Geodaten
+
+```python
+from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
+from uhi_analyzer.config.wfs_config import BERLIN_ADMIN_BOUNDARIES_CONFIG
+
+# Downloader initialisieren
+downloader = WFSDataDownloader(config=BERLIN_ADMIN_BOUNDARIES_CONFIG)
+
+# Daten herunterladen
+success = downloader.download_and_validate(
+    endpoint_name="berlin_admin_boundaries",
+    output_path="data/raw/boundaries/berlin.geojson"
+)
+```
+
+## 🧪 Tests
 
 ```bash
-# Test der Jahr-Auswahl und URL-Generierung
-uv run python tests/integration/test_corine_years.py
+# Alle Tests ausführen
+uv run pytest
+
+# Spezifische Tests
+uv run pytest tests/integration/test_corine_years.py
 ```
 
-## Dokumentation
+## 📝 Logging
 
-Weitere Details zu den Downloader-Komponenten finden Sie in der Dokumentation:
+Das System verwendet strukturiertes Logging:
 
-- **[CorineDownloader](docs/corine_downloader.md)** - Corine Land Cover Daten Downloader
-- **[WFSDownloader](docs/wfs_downloader.md)** - Web Feature Service Downloader
+```python
+import logging
+
+# Logger konfigurieren
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/application.log'),
+        logging.StreamHandler()
+    ]
+)
+```
+
+## 🔧 Konfiguration
+
+### UHI-Analyzer-Einstellungen
+- `UHI_CLOUD_COVER_THRESHOLD`: Maximale Wolkenbedeckung in Prozent (Standard: 20)
+- `UHI_GRID_CELL_SIZE`: Rasterzellengröße in Metern (Standard: 100)
+- `UHI_HOTSPOT_THRESHOLD`: Schwellenwert für Hotspot-Identifikation (Standard: 0.9)
+- `UHI_LANDSAT_COLLECTION`: Landsat-Datensammlung (Standard: "LANDSAT/LC08/C02/T1_L2")
+
+### DWD-Einstellungen
+- `DWD_BUFFER_DISTANCE`: Buffer um Geometrie in Metern (Standard: 5000)
+- `DWD_INTERPOLATION_RESOLUTION`: Auflösung für Interpolation in Metern (Standard: 1000)
+- `DWD_INTERPOLATION_METHOD`: Interpolationsmethode (Standard: "linear")
+
+### Corine-Einstellungen
+- Unterstützte Jahre: 1990, 2000, 2006, 2012, 2018
+- Automatische Jahr-Auswahl basierend auf gewünschtem Jahr
+
+## 📚 Dokumentation
+
+- **[UrbanHeatIslandAnalyzer](docs/urban_heat_island_analyzer.md)** - Satellitenbasierte UHI-Analyse
+- **[DWDDataDownloader](docs/dwd_downloader.md)** - DWD Wetterdaten Downloader
+- **[CorineDataDownloader](docs/corine_downloader.md)** - Corine Land Cover Daten Downloader
+- **[WFSDataDownloader](docs/wfs_downloader.md)** - Web Feature Service Downloader
+
+## 🤝 Beitragen
+
+1. Fork erstellen
+2. Feature-Branch erstellen (`git checkout -b feature/amazing-feature`)
+3. Änderungen committen (`git commit -m 'Add amazing feature'`)
+4. Branch pushen (`git push origin feature/amazing-feature`)
+5. Pull Request erstellen
+
+## 📄 Lizenz
+
+Dieses Projekt ist unter der MIT-Lizenz lizenziert.

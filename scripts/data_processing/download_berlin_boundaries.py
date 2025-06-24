@@ -1,43 +1,39 @@
 #!/usr/bin/env python3
 """
-Script zum Download der Berliner Verwaltungsgrenzen vom WFS-Service.
+Download Berlin administrative boundaries using WFS service.
 
-Dieses Script nutzt die WFSDownloader-Klasse um die Verwaltungsgrenzen von Berlin
-über einen WFS-Service herunterzuladen und als GeoJSON-Datei zu speichern.
+This script uses the WFSDataDownloader class to download Berlin's administrative boundaries
+via the WFS service of the Berlin Geodata Infrastructure.
 """
 
 import sys
 from pathlib import Path
 
-# Projektroot zum Import der Module
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add src to path for imports
+sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
 
-from src.uhi_analyzer.config import WFS_ENDPOINTS, WFS_HEADERS, WFS_TIMEOUT
-from src.uhi_analyzer.data import WFSDownloader
-
+from src.uhi_analyzer.data import WFSDataDownloader
+from src.uhi_analyzer.config.wfs_config import BERLIN_ADMIN_BOUNDARIES_CONFIG
 
 def main():
-    """Hauptfunktion zum Download der Berliner Verwaltungsgrenzen."""
-    # Ausgabeverzeichnis
-    output_dir = project_root / "data" / "raw" / "boundaries"
-    output_file = output_dir / "berlin_admin_boundaries.geojson"
+    """Download Berlin administrative boundaries."""
     
-    # Log-Datei für bessere Nachverfolgung
-    log_file = project_root / "logs" / "wfs_downloads.log"
-    
-    # WFS-Downloader initialisieren
-    downloader = WFSDownloader(
-        config=WFS_ENDPOINTS,
-        headers=WFS_HEADERS,
-        timeout=WFS_TIMEOUT,
-        log_file=log_file
+    # Initialize WFS-DataDownloader
+    downloader = WFSDataDownloader(
+        config=BERLIN_ADMIN_BOUNDARIES_CONFIG
     )
     
-    # Verfügbare Endpunkte anzeigen
-    print(f"Verfügbare Endpunkte: {downloader.get_available_endpoints()}")
+    # Output directory
+    output_dir = Path(__file__).parent.parent.parent / "data" / "raw" / "boundaries"
+    output_file = output_dir / "berlin_admin_boundaries.geojson"
     
-    # Daten herunterladen und validieren
+    # Log file for better tracking
+    log_file = Path(__file__).parent.parent.parent / "logs" / "wfs_downloads.log"
+    
+    # Show available endpoints
+    print(f"Available endpoints: {downloader.get_available_endpoints()}")
+    
+    # Download and validate data
     success = downloader.download_and_validate(
         endpoint_name="berlin_admin_boundaries",
         output_path=output_file,
@@ -45,10 +41,10 @@ def main():
     )
     
     if success:
-        print("✅ Download der Berliner Verwaltungsgrenzen erfolgreich abgeschlossen")
+        print("✅ Download of Berlin administrative boundaries completed successfully")
         return True
     else:
-        print("❌ Download fehlgeschlagen")
+        print("❌ Download failed")
         return False
 
 

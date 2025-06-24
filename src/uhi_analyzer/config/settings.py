@@ -5,9 +5,36 @@ This module contains all configuration settings, constants, and utility function
 for the UHI analyzer application.
 """
 
-from typing import Dict, List, Tuple
-import os
 from pathlib import Path
+
+# =============================================================================
+# Coordinate Reference Systems (CRS) Configuration
+# =============================================================================
+
+# Standard coordinate reference systems used throughout the application
+CRS_CONFIG = {
+    # Geographic coordinate systems
+    "GEOGRAPHIC": "EPSG:4326",  # WGS84 - Standard for geographic coordinates
+    
+    # Projected coordinate systems for different regions
+    "BERLIN": "EPSG:25833",     # ETRS89 / UTM Zone 33N - Standard for Berlin
+    "GERMANY_WEST": "EPSG:25832", # ETRS89 / UTM Zone 32N - Standard for Germany (West)
+    "GERMANY_EAST": "EPSG:25833", # ETRS89 / UTM Zone 33N - Standard for Germany (East)
+    "WEB_MERCATOR": "EPSG:3857",  # Web Mercator - Standard for web maps
+    
+    # Processing coordinate systems (for spatial operations)
+    "PROCESSING": "EPSG:25833",  # Standard for spatial operations in Berlin
+    
+    # Output coordinate systems
+    "OUTPUT": "EPSG:4326",       # Standard output format (WGS84)
+}
+
+# Legacy constants for backward compatibility
+GEOGRAPHIC_CRS = CRS_CONFIG["GEOGRAPHIC"]
+BERLIN_CRS = CRS_CONFIG["BERLIN"]
+GERMANY_CRS = CRS_CONFIG["GERMANY_WEST"]
+GERMANY_EAST_CRS = CRS_CONFIG["GERMANY_EAST"]
+WEB_MERCATOR_CRS = CRS_CONFIG["WEB_MERCATOR"]
 
 # =============================================================================
 # WFS Configuration
@@ -22,7 +49,7 @@ WFS_ENDPOINTS = {
         "request": "GetFeature",
         "typeName": "alkis_land:landesgrenze",
         "outputFormat": "application/json",
-        "srsName": "EPSG:4326"
+        "srsName": CRS_CONFIG["GEOGRAPHIC"]
     }
 }
 
@@ -57,8 +84,130 @@ CORINE_BASE_URL = CORINE_BASE_URLS[2018]
 DEFAULT_RECORD_COUNT = 1000
 DEFAULT_TIMEOUT = 30
 DEFAULT_OUTPUT_FORMAT = "geojson"
-DEFAULT_OUTPUT_CRS = "4326"  # WGS84
-DEFAULT_INPUT_CRS = "3857"   # Web Mercator
+DEFAULT_OUTPUT_CRS = CRS_CONFIG["GEOGRAPHIC"].split(":")[1]  # "4326"
+DEFAULT_INPUT_CRS = CRS_CONFIG["WEB_MERCATOR"].split(":")[1]  # "3857"
+
+# Corine Land Cover Code zu Land Use Type Mapping
+CORINE_LANDUSE_MAPPING = {
+    # Urban fabric
+    111: "urban_continuous",
+    112: "urban_discontinuous",
+    
+    # Industrial, commercial and transport units
+    121: "industrial_commercial",
+    122: "road_transport",
+    123: "port_areas", 
+    124: "airports",
+    
+    # Mine, dump and construction sites
+    131: "mineral_extraction",
+    132: "dump_sites",
+    133: "construction_sites",
+    
+    # Artificial non-agricultural vegetated areas
+    141: "green_urban_areas",
+    142: "sport_leisure",
+    
+    # Arable land
+    211: "non_irrigated_arable",
+    212: "irrigated_arable", 
+    213: "rice_fields",
+    
+    # Permanent crops
+    221: "vineyards",
+    222: "fruit_trees",
+    223: "olive_groves",
+    
+    # Pastures
+    231: "pastures",
+    
+    # Heterogeneous agricultural areas
+    241: "agriculture_natural_mixed",
+    242: "complex_cultivation",
+    243: "agriculture_natural_areas",
+    244: "agro_forestry",
+    
+    # Forest
+    311: "broad_leaved_forest",
+    312: "coniferous_forest", 
+    313: "mixed_forest",
+    
+    # Shrub and herbaceous vegetation associations
+    321: "natural_grasslands",
+    322: "moors_heathland",
+    323: "sclerophyllous_vegetation",
+    324: "transitional_woodland",
+    
+    # Open spaces with little or no vegetation
+    331: "beaches_dunes",
+    332: "bare_rocks",
+    333: "sparsely_vegetated",
+    334: "burnt_areas",
+    335: "glaciers_snow",
+    
+    # Wetlands
+    411: "inland_marshes",
+    412: "peat_bogs",
+    421: "salt_marshes",
+    422: "salines",
+    423: "intertidal_flats",
+    
+    # Water bodies
+    511: "water_courses",
+    512: "water_bodies",
+    521: "coastal_lagoons",
+    522: "estuaries",
+    523: "sea_ocean"
+}
+
+# Impervious Area Coefficients für verschiedene Land Use Types
+# Basierend auf wissenschaftlicher Literatur für europäische Städte
+CORINE_IMPERVIOUS_COEFFICIENTS = {
+    "urban_continuous": 0.85,
+    "urban_discontinuous": 0.65,
+    "industrial_commercial": 0.90,
+    "road_transport": 0.95,
+    "port_areas": 0.80,
+    "airports": 0.75,
+    "mineral_extraction": 0.30,
+    "dump_sites": 0.40,
+    "construction_sites": 0.50,
+    "green_urban_areas": 0.15,
+    "sport_leisure": 0.25,
+    "non_irrigated_arable": 0.02,
+    "irrigated_arable": 0.02,
+    "rice_fields": 0.02,
+    "vineyards": 0.05,
+    "fruit_trees": 0.05,
+    "olive_groves": 0.05,
+    "pastures": 0.02,
+    "agriculture_natural_mixed": 0.05,
+    "complex_cultivation": 0.08,
+    "agriculture_natural_areas": 0.03,
+    "agro_forestry": 0.03,
+    "broad_leaved_forest": 0.01,
+    "coniferous_forest": 0.01,
+    "mixed_forest": 0.01,
+    "natural_grasslands": 0.01,
+    "moors_heathland": 0.01,
+    "sclerophyllous_vegetation": 0.02,
+    "transitional_woodland": 0.02,
+    "beaches_dunes": 0.05,
+    "bare_rocks": 0.10,
+    "sparsely_vegetated": 0.05,
+    "burnt_areas": 0.03,
+    "glaciers_snow": 0.00,
+    "inland_marshes": 0.00,
+    "peat_bogs": 0.00,
+    "salt_marshes": 0.00,
+    "salines": 0.00,
+    "intertidal_flats": 0.00,
+    "water_courses": 0.00,
+    "water_bodies": 0.00,
+    "coastal_lagoons": 0.00,
+    "estuaries": 0.00,
+    "sea_ocean": 0.00
+}
 
 # =============================================================================
 # DWD Weather Service Configuration
@@ -67,34 +216,93 @@ DEFAULT_INPUT_CRS = "3857"   # Web Mercator
 # DWD Settings für wetterdienst
 DWD_SETTINGS = {
     "ts_shape": "long",  # Tidy data format
-    "ts_humanize": True,  # Benutzerfreundliche Parameternamen
-    "ts_convert_units": True,  # Einheiten in SI umrechnen
+    "ts_humanize": True,  # User-friendly parameter names
+    "ts_convert_units": True,  # Convert units to SI
 }
 
 # Temperaturparameter für DWD-Abfragen
 DWD_TEMPERATURE_PARAMETERS = [("hourly", "temperature_air", "temperature_air_mean_2m")]
 
 # Interpolation und Buffer-Konfiguration
-DWD_BUFFER_DISTANCE = 5000  # Buffer-Distanz in Metern um die Geometrie zu erweitern
-DWD_INTERPOLATION_RESOLUTION = 30  # Auflösung des Interpolationsrasters in Metern
-DWD_INTERPOLATION_METHOD = "linear"  # Interpolationsmethode ('linear', 'nearest', 'cubic')
-DWD_INTERPOLATE_BY_DEFAULT = True  # Standardmäßig Interpolation durchführen
+DWD_BUFFER_DISTANCE = 5000  # Buffer distance in meters to extend the geometry
+DWD_INTERPOLATION_RESOLUTION = 30  # Resolution of the interpolation grid in meters
+DWD_INTERPOLATION_METHOD = "linear"  # Interpolation method ('linear', 'nearest', 'cubic')
+DWD_INTERPOLATE_BY_DEFAULT = True  # Perform interpolation by default
 
-def get_closest_corine_year(target_year: int) -> int:
+# CRS-Konfiguration für DWD-Daten
+DWD_INPUT_CRS = CRS_CONFIG["GEOGRAPHIC"]  # CRS of DWD station data
+DWD_PROCESSING_CRS = CRS_CONFIG["PROCESSING"]  # CRS for spatial operations
+DWD_OUTPUT_CRS = CRS_CONFIG["OUTPUT"]  # CRS of output data
+
+# =============================================================================
+# UHI Analyzer Configuration
+# =============================================================================
+
+# Satellite Data Configuration
+UHI_CLOUD_COVER_THRESHOLD = 20  # Maximum acceptable cloud cover percentage (0-100)
+UHI_LANDSAT_COLLECTION = "LANDSAT/LC08/C02/T1_L2"  # Landsat 8 Collection 2 Tier 1 Level 2
+UHI_TEMPERATURE_BAND = "ST_B10"  # Surface temperature band
+UHI_SCALE = 30  # Analysis scale in meters
+UHI_MAX_PIXELS = 1e9  # Maximum pixels for Earth Engine operations
+
+# Temperature Conversion Parameters (Landsat 8)
+UHI_TEMP_MULTIPLIER = 0.00341802  # Temperature conversion multiplier
+UHI_TEMP_ADDEND = 149.0  # Temperature conversion addend
+UHI_KELVIN_OFFSET = 273.15  # Kelvin to Celsius conversion
+
+# Analysis Grid Configuration
+UHI_GRID_CELL_SIZE = 100  # Analysis grid cell size in meters
+UHI_GRID_CRS = CRS_CONFIG["WEB_MERCATOR"]  # CRS for grid creation (Web Mercator)
+UHI_OUTPUT_CRS = CRS_CONFIG["OUTPUT"]  # Output CRS (WGS84)
+
+# Hotspot Analysis Configuration
+UHI_HOTSPOT_THRESHOLD = 0.9  # Percentile threshold for hotspot identification
+UHI_MIN_CLUSTER_SIZE = 5  # Minimum number of cells for a valid hotspot cluster
+UHI_MORAN_SIGNIFICANCE = 0.05  # Significance level for Moran's I test
+
+# Statistical Analysis Configuration
+UHI_PERCENTILES = [10, 25, 50, 75, 90]  # Percentiles for temperature statistics
+UHI_CORRELATION_THRESHOLD = 0.5  # Threshold for significant land use correlations
+
+# Visualization Configuration
+UHI_VISUALIZATION_DPI = 300  # DPI for saved visualizations
+UHI_VISUALIZATION_FIGSIZE = (15, 15)  # Figure size for visualizations
+UHI_TEMPERATURE_COLORMAP = "hot"  # Colormap for temperature visualizations
+
+# Logging Configuration
+UHI_LOG_DIR = Path("logs")  # Directory for log files
+UHI_LOG_LEVEL = "INFO"  # Logging level
+
+
+def get_best_corine_year_for_date_range(start_year: int, end_year: int) -> int:
     """
-    Findet das nächstgelegene verfügbare Corine-Jahr.
+    Findet das beste verfügbare Corine-Jahr für einen Datumsbereich.
+    Bevorzugt das neueste verfügbare Jahr innerhalb des Zeitraums.
+    Falls kein Jahr innerhalb des Zeitraums verfügbar ist, nimmt das nächstgelegene Jahr.
     
     Args:
-        target_year: Gewünschtes Jahr
+        start_year: Startjahr des Analysezeitraums
+        end_year: Endjahr des Analysezeitraums
         
     Returns:
-        Nächstgelegenes verfügbares Corine-Jahr
+        Bestes verfügbares Corine-Jahr für den Zeitraum
         
     Raises:
-        ValueError: Wenn keine verfügbaren Jahre vorhanden sind
+        ValueError: Wenn keine verfügbaren Jahre vorhanden sind oder start_year > end_year
     """
     if not CORINE_YEARS:
         raise ValueError("Keine verfügbaren Corine-Jahre konfiguriert")
     
-    closest_year = min(CORINE_YEARS, key=lambda x: abs(x - target_year))
-    return closest_year 
+    if start_year > end_year:
+        raise ValueError(f"Startjahr ({start_year}) muss vor Endjahr ({end_year}) liegen")
+    
+    # Finde Jahre innerhalb des Zeitraums
+    years_in_range = [year for year in CORINE_YEARS if start_year <= year <= end_year]
+    
+    if years_in_range:
+        # Nimm das neueste Jahr innerhalb des Zeitraums
+        return max(years_in_range)
+    else:
+        # Falls kein Jahr innerhalb des Zeitraums, nimm das nächstgelegene zum Zeitraum-Mittelpunkt
+        midpoint = (start_year + end_year) / 2
+        return min(CORINE_YEARS, key=lambda x: abs(x - midpoint)) 

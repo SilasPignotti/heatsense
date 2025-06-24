@@ -1,31 +1,55 @@
-# WFSDownloader - Web Feature Service Downloader
+# WFSDataDownloader - Web Feature Service Downloader
 
-## Übersicht
+## Overview
 
-Der `WFSDownloader` ist ein generischer Downloader für Geodaten über Web Feature Service (WFS) APIs. Er ermöglicht das einfache Herunterladen von Geodaten von verschiedenen WFS-Services mit konfigurierbaren Endpunkten und verschiedenen Ausgabeformaten.
+The `WFSDataDownloader` is a generic downloader for geodata via Web Feature Service (WFS) APIs. It enables easy downloading of geodata from various WFS services with configurable endpoints and comprehensive logging.
 
 ## Features
 
-- **Konfigurierbare Endpunkte**: Unterstützt verschiedene WFS-Services über zentrale Konfiguration
-- **Flexible Ausgabeformate**: Unterstützt GeoJSON und andere Formate
-- **Automatische Validierung**: Optional GeoJSON-Validierung nach Download
-- **Umfassendes Logging**: Detaillierte Protokollierung aller Operationen
-- **Fehlerbehandlung**: Robuste Behandlung von Netzwerk- und API-Fehlern
-- **Timeout-Konfiguration**: Anpassbare Timeouts für HTTP-Requests
+- **Generic WFS Support**: Works with all WFS 2.0.0 services
+- **Configurable Endpoints**: Easy configuration via JSON/YAML
+- **Automatic Validation**: GeoJSON validation after download
+- **Comprehensive Logging**: Detailed logging of all operations
+- **Error Handling**: Robust handling of network and API errors
+- **Flexible Output**: Support for various output formats
 
-## Konfiguration
+## Installation
 
-### WFS-Endpunkte
+```bash
+# Install dependencies
+uv add geopandas requests
+```
 
-Die WFS-Endpunkte sind in `src/uhi_analyzer/config/settings.py` konfiguriert:
+## Basic Usage
 
 ```python
-from uhi_analyzer.config import WFS_ENDPOINTS
+from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
+from uhi_analyzer.config.wfs_config import BERLIN_ADMIN_BOUNDARIES_CONFIG
 
-# Beispiel-Konfiguration
-WFS_ENDPOINTS = {
+# Initialize downloader
+downloader = WFSDataDownloader(config=BERLIN_ADMIN_BOUNDARIES_CONFIG)
+
+# Download data
+success = downloader.download_and_validate(
+    endpoint_name="berlin_admin_boundaries",
+    output_path="data/raw/boundaries/berlin.geojson"
+)
+
+if success:
+    print("Download successful!")
+else:
+    print("Download failed!")
+```
+
+## Configuration
+
+### WFS Endpoint Configuration
+
+```python
+# Example configuration
+BERLIN_ADMIN_BOUNDARIES_CONFIG = {
     "berlin_admin_boundaries": {
-        "url": "https://gdi.berlin.de/services/wfs/alkis_land", 
+        "url": "https://gdi.berlin.de/services/wfs/alkis_land",
         "service": "WFS",
         "version": "2.0.0",
         "request": "GetFeature",
@@ -36,259 +60,370 @@ WFS_ENDPOINTS = {
 }
 ```
 
-### HTTP-Header
+### Parameters
 
-Standard-Header für WFS-Requests:
+- `config`: WFS configuration with endpoints
+- `headers`: Optional HTTP headers
+- `timeout`: Timeout in seconds (default: 30)
+- `log_file`: Optional path for log file
 
-```python
-WFS_HEADERS = {
-    "User-Agent": "Urban-Heat-Island-Analyzer/1.0",
-    "Accept": "application/json,application/geojson"
-}
-```
+## Advanced Usage
 
-## Verwendung
-
-### Grundlegende Initialisierung
+### Multiple Endpoints
 
 ```python
-from uhi_analyzer.data.wfs_downloader import WFSDownloader
-from uhi_analyzer.config import WFS_ENDPOINTS, WFS_HEADERS
-
-# Downloader initialisieren
-downloader = WFSDownloader(
-    config=WFS_ENDPOINTS,
-    headers=WFS_HEADERS,
-    timeout=30,
-    log_file=Path("logs/wfs_downloads.log")
-)
-```
-
-### Daten herunterladen
-
-```python
-# Einfacher Download
-success = downloader.download_data(
-    endpoint_name="berlin_admin_boundaries",
-    output_path="data/raw/boundaries/berlin_boundaries.geojson"
-)
-
-# Download mit zusätzlichen Parametern
-success = downloader.download_data(
-    endpoint_name="berlin_admin_boundaries",
-    output_path="data/raw/boundaries/berlin_boundaries.geojson",
-    maxFeatures=1000,
-    bbox="13.0,52.0,14.0,53.0"
-)
-```
-
-### Download mit Validierung
-
-```python
-# Download mit automatischer GeoJSON-Validierung
-success = downloader.download_and_validate(
-    endpoint_name="berlin_admin_boundaries",
-    output_path="data/raw/boundaries/berlin_boundaries.geojson",
-    validate=True
-)
-```
-
-### URL-Generierung
-
-```python
-# WFS-URL manuell generieren
-url = downloader.build_wfs_url(
-    endpoint_name="berlin_admin_boundaries",
-    maxFeatures=500
-)
-print(f"WFS-URL: {url}")
-```
-
-## Funktionalitäten
-
-### Endpunkt-Verwaltung
-
-```python
-# Verfügbare Endpunkte anzeigen
-endpoints = downloader.get_available_endpoints()
-print(f"Verfügbare Endpunkte: {endpoints}")
-
-# Endpunkt-Informationen abrufen
-info = downloader.get_endpoint_info("berlin_admin_boundaries")
-print(f"Endpunkt-Info: {info}")
-```
-
-### GeoJSON-Validierung
-
-```python
-# GeoJSON-Datei validieren
-is_valid = downloader.validate_geojson("data/raw/boundaries/berlin_boundaries.geojson")
-if is_valid:
-    print("GeoJSON ist gültig")
-else:
-    print("GeoJSON ist ungültig")
-```
-
-### Benutzerdefinierte Konfiguration
-
-```python
-# Eigene WFS-Konfiguration erstellen
-custom_config = {
-    "my_wfs_service": {
-        "url": "https://example.com/wfs",
+# Configuration with multiple endpoints
+config = {
+    "berlin_boundaries": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_land",
         "service": "WFS",
         "version": "2.0.0",
         "request": "GetFeature",
-        "typeName": "my:layer",
+        "typeName": "alkis_land:landesgrenze",
+        "outputFormat": "application/json",
+        "srsName": "EPSG:4326"
+    },
+    "berlin_districts": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_land",
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "GetFeature",
+        "typeName": "alkis_land:bezirksgrenze",
         "outputFormat": "application/json",
         "srsName": "EPSG:4326"
     }
 }
 
-# Downloader mit eigener Konfiguration
-downloader = WFSDownloader(config=custom_config)
+downloader = WFSDataDownloader(config=config)
+
+# Use different endpoints
+downloader.download_and_validate("berlin_boundaries", "boundaries.geojson")
+downloader.download_and_validate("berlin_districts", "districts.geojson")
+```
+
+### Custom Headers
+
+```python
+# Custom headers for special services
+headers = {
+    "User-Agent": "MyApp/1.0",
+    "Accept": "application/json,application/geojson",
+    "Authorization": "Bearer your-token"
+}
+
+downloader = WFSDataDownloader(
+    config=config,
+    headers=headers,
+    timeout=60
+)
+```
+
+### Configure Logging
+
+```python
+from pathlib import Path
+
+# Specify log file
+log_file = Path("logs/wfs_downloads.log")
+
+downloader = WFSDataDownloader(
+    config=config,
+    log_file=log_file
+)
+```
+
+## API Methods
+
+### `download_data(endpoint_name, output_path, **kwargs)`
+
+Downloads data from the WFS service and saves it.
+
+```python
+success = downloader.download_data(
+    endpoint_name="berlin_boundaries",
+    output_path="data/raw/boundaries.geojson",
+    maxFeatures=1000  # Additional parameters
+)
+```
+
+### `validate_geojson(file_path)`
+
+Validates a GeoJSON file.
+
+```python
+is_valid = downloader.validate_geojson("data/raw/boundaries.geojson")
+if is_valid:
+    print("GeoJSON is valid")
+```
+
+### `download_and_validate(endpoint_name, output_path, validate=True, **kwargs)`
+
+Downloads data and optionally validates it.
+
+```python
+success = downloader.download_and_validate(
+    endpoint_name="berlin_boundaries",
+    output_path="data/raw/boundaries.geojson",
+    validate=True,
+    maxFeatures=1000
+)
+```
+
+### `get_available_endpoints()`
+
+Returns all available endpoints.
+
+```python
+endpoints = downloader.get_available_endpoints()
+print(f"Available endpoints: {endpoints}")
+```
+
+### `get_endpoint_info(endpoint_name)`
+
+Returns information about a specific endpoint.
+
+```python
+info = downloader.get_endpoint_info("berlin_boundaries")
+print(f"Endpoint info: {info}")
+```
+
+## WFS URL Generation
+
+### Automatic URL Generation
+
+```python
+# URL is automatically generated from configuration
+url = downloader.build_wfs_url("berlin_boundaries")
+print(f"WFS URL: {url}")
+```
+
+### Additional Parameters
+
+```python
+# URL with additional parameters
+url = downloader.build_wfs_url(
+    "berlin_boundaries",
+    maxFeatures=1000,
+    filter="name='Berlin'"
+)
+```
+
+## Error Handling
+
+### Network Errors
+
+```python
+try:
+    success = downloader.download_data("endpoint", "output.geojson")
+    if not success:
+        print("Download failed")
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+### Validation Errors
+
+```python
+# GeoJSON validation
+if downloader.validate_geojson("file.geojson"):
+    print("File is valid")
+else:
+    print("File is invalid")
 ```
 
 ## Logging
 
-Der WFSDownloader bietet umfassendes Logging:
+The WFSDataDownloader provides comprehensive logging:
 
 ```python
-# Logger-Konfiguration
-downloader = WFSDownloader(
-    config=WFS_ENDPOINTS,
+import logging
+
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+
+# Use downloader
+downloader = WFSDataDownloader(config=config)
+# Logs show: URL generation, download progress, validation, etc.
+```
+
+### Log Examples
+
+```
+2024-01-15 10:30:00 - INFO - Downloading data from: https://gdi.berlin.de/services/wfs/alkis_land?...
+2024-01-15 10:30:01 - INFO - Data successfully saved: data/raw/boundaries.geojson
+2024-01-15 10:30:02 - INFO - GeoJSON validated: 1 features found
+2024-01-15 10:30:02 - INFO - CRS: EPSG:4326
+```
+
+## Examples
+
+### Complete Example
+
+```python
+from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
+from pathlib import Path
+
+# Configuration
+config = {
+    "berlin_boundaries": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_land",
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "GetFeature",
+        "typeName": "alkis_land:landesgrenze",
+        "outputFormat": "application/json",
+        "srsName": "EPSG:4326"
+    }
+}
+
+# Initialize downloader
+downloader = WFSDataDownloader(
+    config=config,
+    timeout=30,
     log_file=Path("logs/wfs_downloads.log")
 )
-```
 
-Beispiel-Log-Ausgabe:
-```
-2024-01-15 10:30:00 - INFO - Lade Daten von: https://gdi.berlin.de/services/wfs/alkis_land?service=WFS&version=2.0.0&request=GetFeature&typeNames=alkis_land:landesgrenze&outputFormat=application/json&srsName=EPSG:4326
-2024-01-15 10:30:05 - INFO - Daten erfolgreich gespeichert: data/raw/boundaries/berlin_boundaries.geojson
-2024-01-15 10:30:05 - INFO - GeoJSON validiert: 12 Features gefunden
-2024-01-15 10:30:05 - INFO - CRS: EPSG:4326
-```
+# Show available endpoints
+print(f"Available endpoints: {downloader.get_available_endpoints()}")
 
-## Fehlerbehandlung
-
-Der Downloader behandelt verschiedene Fehlertypen:
-
-```python
-try:
-    success = downloader.download_data(
-        endpoint_name="invalid_endpoint",
-        output_path="output.geojson"
-    )
-    if not success:
-        print("Download fehlgeschlagen")
-except KeyError as e:
-    print(f"Endpunkt nicht gefunden: {e}")
-except Exception as e:
-    print(f"Unerwarteter Fehler: {e}")
-```
-
-## Kommandozeile
-
-Das Download-Skript für Berliner Grenzen:
-
-```bash
-# Berliner Verwaltungsgrenzen herunterladen
-uv run scripts/data_processing/download_berlin_boundaries.py
-```
-
-## Ausgabedateien
-
-Heruntergeladene Daten werden im folgenden Format gespeichert:
-
-```
-data/raw/boundaries/
-├── berlin_admin_boundaries.geojson
-└── large_test_area.geojson
-```
-
-## WFS-Parameter
-
-Häufig verwendete WFS-Parameter:
-
-| Parameter | Beschreibung | Beispiel |
-|-----------|--------------|----------|
-| `maxFeatures` | Maximale Anzahl Features | `maxFeatures=1000` |
-| `bbox` | Bounding Box Filter | `bbox=13.0,52.0,14.0,53.0` |
-| `filter` | CQL-Filter | `filter=name='Berlin'` |
-| `startIndex` | Start-Index für Paginierung | `startIndex=0` |
-| `count` | Anzahl Features pro Request | `count=100` |
-
-## Best Practices
-
-### 1. Timeout-Konfiguration
-
-```python
-# Längere Timeouts für große Datasets
-downloader = WFSDownloader(
-    config=WFS_ENDPOINTS,
-    timeout=60  # 60 Sekunden
-)
-```
-
-### 2. Validierung aktivieren
-
-```python
-# Immer validieren für kritische Daten
+# Download and validate data
 success = downloader.download_and_validate(
-    endpoint_name="berlin_admin_boundaries",
-    output_path="output.geojson",
+    endpoint_name="berlin_boundaries",
+    output_path="data/raw/boundaries/berlin.geojson",
     validate=True
 )
+
+if success:
+    print("✅ Download successfully completed")
+else:
+    print("❌ Download failed")
 ```
 
-### 3. Logging verwenden
+### Multiple Services
 
 ```python
-# Log-Datei für Debugging
-downloader = WFSDownloader(
-    config=WFS_ENDPOINTS,
-    log_file=Path("logs/wfs_downloads.log")
-)
-```
+# Different WFS services
+services = {
+    "berlin_boundaries": BERLIN_CONFIG,
+    "custom_service": CUSTOM_CONFIG
+}
 
-### 4. Fehlerbehandlung
-
-```python
-# Robuste Fehlerbehandlung
-if not downloader.download_data(endpoint_name, output_path):
-    logger.error("Download fehlgeschlagen")
-    # Fallback-Logik implementieren
-```
-
-## Erweiterte Verwendung
-
-### Batch-Downloads
-
-```python
-# Mehrere Endpunkte herunterladen
-endpoints = ["berlin_admin_boundaries", "other_boundaries"]
-for endpoint in endpoints:
-    success = downloader.download_data(
-        endpoint_name=endpoint,
-        output_path=f"data/raw/boundaries/{endpoint}.geojson"
+for service_name, service_config in services.items():
+    downloader = WFSDataDownloader(config=service_config)
+    
+    success = downloader.download_and_validate(
+        endpoint_name=list(service_config.keys())[0],
+        output_path=f"data/raw/{service_name}.geojson"
     )
-    if not success:
-        print(f"Download fehlgeschlagen für {endpoint}")
+    
+    print(f"{service_name}: {'✅' if success else '❌'}")
 ```
 
-### Dynamische URL-Generierung
+### Dynamic Configuration
 
 ```python
-# URLs für verschiedene Parameter generieren
-bboxes = [
-    "13.0,52.0,14.0,53.0",
-    "12.0,51.0,15.0,54.0"
+# Create dynamic configuration
+def create_wfs_config(base_url, type_name):
+    return {
+        "endpoint": {
+            "url": base_url,
+            "service": "WFS",
+            "version": "2.0.0",
+            "request": "GetFeature",
+            "typeName": type_name,
+            "outputFormat": "application/json",
+            "srsName": "EPSG:4326"
+        }
+    }
+
+# Create configuration
+config = create_wfs_config(
+    "https://example.com/wfs",
+    "namespace:feature_type"
+)
+
+downloader = WFSDataDownloader(config=config)
+```
+
+### Batch Processing
+
+```python
+# Process multiple endpoints
+endpoints = [
+    ("berlin_boundaries", "data/raw/berlin_boundaries.geojson"),
+    ("berlin_districts", "data/raw/berlin_districts.geojson"),
+    ("berlin_neighborhoods", "data/raw/berlin_neighborhoods.geojson")
 ]
 
-for i, bbox in enumerate(bboxes):
-    url = downloader.build_wfs_url(
-        endpoint_name="berlin_admin_boundaries",
-        bbox=bbox
+for endpoint_name, output_path in endpoints:
+    success = downloader.download_and_validate(
+        endpoint_name=endpoint_name,
+        output_path=output_path,
+        validate=True
     )
-    print(f"URL {i+1}: {url}")
-``` 
+    
+    status = "✅" if success else "❌"
+    print(f"{endpoint_name}: {status} -> {output_path}")
+```
+
+## Performance Optimization
+
+- **Timeout Setting**: Adjust to network speed
+- **Caching**: Avoid duplicate downloads
+- **Validation**: Only enable when needed
+- **Batch Processing**: Process multiple endpoints efficiently
+
+## Troubleshooting
+
+### Common Problems
+
+1. **400 Bad Request**: Check the `typeName` and URL
+2. **Timeout**: Increase the timeout value
+3. **Invalid GeoJSON**: Check the API response
+4. **CRS Issues**: Ensure correct coordinate system
+
+### Debug Mode
+
+```python
+import logging
+
+# Enable debug logging
+logging.getLogger("uhi_analyzer.data.wfs_downloader").setLevel(logging.DEBUG)
+
+# Use downloader
+downloader = WFSDataDownloader(config=config)
+# Detailed logs will be output
+```
+
+### Error Recovery
+
+```python
+# Retry mechanism
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        success = downloader.download_data("endpoint", "output.geojson")
+        if success:
+            break
+    except Exception as e:
+        print(f"Attempt {attempt + 1} failed: {e}")
+        if attempt == max_retries - 1:
+            print("All attempts failed")
+```
+
+## Supported WFS Versions
+
+- **WFS 1.0.0**: Basic feature service
+- **WFS 1.1.0**: Enhanced feature service
+- **WFS 2.0.0**: Full feature service (recommended)
+
+## Output Formats
+
+- **GeoJSON**: Default format for web applications
+- **GML**: Geographic Markup Language
+- **Shapefile**: ESRI format (via conversion)
+- **KML**: Google Earth format (via conversion)
+
+---
+
+**Author:** Urban Heat Island Analyzer Team 

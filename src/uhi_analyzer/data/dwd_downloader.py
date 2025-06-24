@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 """
-DWD Weather Data Downloader - Lädt Wetterdaten basierend auf Geometrie und Zeitpunkt.
+DWD Weather Data Downloader - Downloads weather data based on geometry and time period.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Union, Dict, Any
 import geopandas as gpd
 import pandas as pd
-import polars as pl
 from shapely.geometry import Point, Polygon, MultiPolygon, shape
 import json
-from pathlib import Path
 import numpy as np
 from scipy.interpolate import griddata
-from shapely.ops import unary_union
 
 from wetterdienst import Settings
 from wetterdienst.provider.dwd.observation import DwdObservationRequest
@@ -22,27 +19,31 @@ from wetterdienst.provider.dwd.observation import DwdObservationRequest
 from ..config.settings import (
     DWD_SETTINGS, DWD_TEMPERATURE_PARAMETERS,
     DWD_BUFFER_DISTANCE, DWD_INTERPOLATION_RESOLUTION, 
-    DWD_INTERPOLATION_METHOD, DWD_INTERPOLATE_BY_DEFAULT
+    DWD_INTERPOLATION_METHOD, DWD_INTERPOLATE_BY_DEFAULT,
+    CRS_CONFIG
 )
 
-# Logging konfigurieren
+# Configure logging
 logger = logging.getLogger(__name__)
 
 
-class BerlinWeatherService:
+class DWDDataDownloader:
     """
-    Service zum Abrufen von Wetterdaten basierend auf Geometrie und Zeitpunkt.
+    Service for retrieving and averaging weather data based on geometry and time period.
     """
     
-    def __init__(self, buffer_distance: float = None, interpolation_method: str = None):
+    def __init__(self, buffer_distance: float = None, interpolation_method: str = None,
+                 interpolate_by_default: bool = None, interpolation_resolution: float = None):
         """
-        Initialisiert den Weather Service.
+        Initializes the Weather Service.
         
         Args:
-            buffer_distance: Optionaler Buffer in Metern (Standard aus Config)
-            interpolation_method: Optionaler Interpolationsmethode (Standard aus Config)
+            buffer_distance: Optional buffer in meters (default from config)
+            interpolation_method: Optional interpolation method (default from config)
+            interpolate_by_default: Whether to interpolate by default (default from config)
+            interpolation_resolution: Resolution of the interpolation grid in meters (default from config)
         """
-        # Settings mit den Projekt-Konfigurationen erstellen
+        # Create settings with project configurations
         settings_kwargs = {
             "ts_shape": DWD_SETTINGS["ts_shape"],
             "ts_humanize": DWD_SETTINGS["ts_humanize"],
@@ -50,19 +51,21 @@ class BerlinWeatherService:
         }
         self.settings = Settings(**settings_kwargs)
         
-        # Buffer und Interpolationsmethode setzen
+        # Set buffer and interpolation settings
         self.buffer_distance = buffer_distance or DWD_BUFFER_DISTANCE
         self.interpolation_method = interpolation_method or DWD_INTERPOLATION_METHOD
+        self.interpolate_by_default = interpolate_by_default if interpolate_by_default is not None else DWD_INTERPOLATE_BY_DEFAULT
+        self.interpolation_resolution = interpolation_resolution or DWD_INTERPOLATION_RESOLUTION
     
     def _create_geometry_from_geojson(self, geojson: Union[str, Dict[str, Any]]) -> Union[Point, Polygon, MultiPolygon]:
         """
-        Erstellt eine Shapely-Geometrie aus GeoJSON.
+        Creates a Shapely geometry from GeoJSON.
         
         Args:
-            geojson: GeoJSON als String oder Dictionary
+            geojson: GeoJSON as string or dictionary
             
         Returns:
-            Shapely-Geometrie
+            Shapely geometry
         """
         if isinstance(geojson, str):
             geojson = json.loads(geojson)
@@ -71,14 +74,18 @@ class BerlinWeatherService:
     
     def _get_bounding_box_from_geometry(self, geometry: Union[Point, Polygon, MultiPolygon]) -> Dict[str, float]:
         """
-        Erstellt eine Bounding Box aus einer Geometrie.
+        Creates a bounding box from a geometry.
         
         Args:
-            geometry: Shapely-Geometrie
+            geometry: Shapely geometry
             
         Returns:
-            Dictionary mit min/max Koordinaten
+            Dictionary with min/max coordinates
         """
+        # Ensure the geometry is in WGS84 for lat/lon bounds
+        if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            geometry = geometry.to_crs(CRS_CONFIG["GEOGRAPHIC"])
+        
         bounds = geometry.bounds  # (minx, miny, maxx, maxy)
         
         return {
@@ -91,74 +98,83 @@ class BerlinWeatherService:
     def _create_interpolation_grid(self, geometry: Union[Point, Polygon, MultiPolygon], 
                                  resolution: float = 1000) -> gpd.GeoDataFrame:
         """
-        Erstellt ein regelmäßiges Raster für die Interpolation.
+        Creates a regular grid for interpolation.
         
         Args:
-            geometry: Shapely-Geometrie
-            resolution: Auflösung des Rasters in Metern
+            geometry: Shapely geometry
+            resolution: Grid resolution in meters
             
         Returns:
-            GeoDataFrame mit Rasterpunkten
+            GeoDataFrame with grid points
         """
-        # Bounding Box der Geometrie
+        # Convert geometry to projected CRS for metric calculations
+        if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            geometry = geometry.to_crs(CRS_CONFIG["PROCESSING"])
+        else:
+            geometry = gpd.GeoSeries([geometry], crs=CRS_CONFIG["GEOGRAPHIC"]).to_crs(CRS_CONFIG["PROCESSING"])[0]
+        
+        # Bounding box of the geometry
         bounds = geometry.bounds
         
-        # Raster erstellen (in Grad, grobe Näherung: 1 Grad ≈ 111km)
-        lat_step = resolution / 111000  # Grad pro Meter
-        lon_step = resolution / (111000 * np.cos(np.radians((bounds[1] + bounds[3]) / 2)))
+        # Create grid in projected coordinates
+        x_range = np.arange(bounds[0], bounds[2] + resolution, resolution)
+        y_range = np.arange(bounds[1], bounds[3] + resolution, resolution)
         
-        # Rasterpunkte generieren
-        lats = np.arange(bounds[1], bounds[3] + lat_step, lat_step)
-        lons = np.arange(bounds[0], bounds[2] + lon_step, lon_step)
-        
-        # Alle Kombinationen erstellen
+        # Create all combinations
         grid_points = []
-        for lat in lats:
-            for lon in lons:
-                point = Point(lon, lat)
+        for x in x_range:
+            for y in y_range:
+                point = Point(x, y)
                 if geometry.contains(point):
                     grid_points.append(point)
         
-        # Als GeoDataFrame
+        # As GeoDataFrame with projected CRS
         grid_gdf = gpd.GeoDataFrame(
             geometry=grid_points,
-            crs="EPSG:4326"
+            crs=CRS_CONFIG["PROCESSING"]
         )
         
-        logger.info(f"Interpolationsraster erstellt: {len(grid_gdf)} Punkte mit {resolution}m Auflösung")
+        # Back to output CRS
+        grid_gdf = grid_gdf.to_crs(CRS_CONFIG["OUTPUT"])
+        
+        logger.info(f"Interpolation grid created: {len(grid_gdf)} points with {resolution}m resolution")
         return grid_gdf
     
     def _interpolate_temperature(self, stations_gdf: gpd.GeoDataFrame, 
                                target_gdf: gpd.GeoDataFrame,
                                method: str = 'linear') -> gpd.GeoDataFrame:
         """
-        Interpoliert Temperaturdaten von Wetterstationen auf ein Raster.
+        Interpolates temperature data from weather stations onto a grid.
         
         Args:
-            stations_gdf: GeoDataFrame mit Stationsdaten (bereits gefiltert für Zielzeitpunkt)
-            target_gdf: GeoDataFrame mit Zielpunkten
-            method: Interpolationsmethode ('linear', 'nearest', 'cubic')
+            stations_gdf: GeoDataFrame with averaged station data
+            target_gdf: GeoDataFrame with target points
+            method: Interpolation method ('linear', 'nearest', 'cubic')
             
         Returns:
-            GeoDataFrame mit interpolierten Temperaturen
+            GeoDataFrame with interpolated temperatures
         """
         if len(stations_gdf) < 3:
-            logger.warning("Zu wenige Stationen für Interpolation. Verwende Nearest Neighbor.")
+            logger.warning("Too few stations for interpolation. Using Nearest Neighbor.")
             method = 'nearest'
         
-        # Koordinaten der Stationen
+        # Convert both DataFrames to projected CRS for metric calculations
+        stations_projected = stations_gdf.to_crs(CRS_CONFIG["PROCESSING"])
+        target_projected = target_gdf.to_crs(CRS_CONFIG["PROCESSING"])
+        
+        # Coordinates of stations (in meters)
         station_coords = np.array([
-            stations_gdf.geometry.x.values,
-            stations_gdf.geometry.y.values
+            stations_projected.geometry.x.values,
+            stations_projected.geometry.y.values
         ]).T
         
-        # Temperaturwerte (direkt verwenden, keine Durchschnittsbildung)
-        station_temps = stations_gdf['value'].values
+        # Averaged temperature values
+        station_temps = stations_projected['ground_temp'].values
         
-        # Koordinaten der Zielpunkte
+        # Coordinates of target points (in meters)
         target_coords = np.array([
-            target_gdf.geometry.x.values,
-            target_gdf.geometry.y.values
+            target_projected.geometry.x.values,
+            target_projected.geometry.y.values
         ]).T
         
         # Interpolation
@@ -170,13 +186,13 @@ class BerlinWeatherService:
             fill_value=np.nan
         )
         
-        # Ergebnis-GeoDataFrame
+        # Result GeoDataFrame (in output CRS)
         result_gdf = target_gdf.copy()
         result_gdf['ground_temp'] = interpolated_temps
         
-        # NaN-Werte mit Nearest Neighbor füllen
+        # Fill NaN values with Nearest Neighbor interpolation
         if np.any(np.isnan(result_gdf['ground_temp'])):
-            logger.info("Fülle NaN-Werte mit Nearest Neighbor Interpolation")
+            logger.info("Filling NaN values with Nearest Neighbor interpolation")
             nan_mask = np.isnan(result_gdf['ground_temp'])
             if np.any(nan_mask):
                 nearest_temps = griddata(
@@ -187,43 +203,52 @@ class BerlinWeatherService:
                 )
                 result_gdf.loc[nan_mask, 'ground_temp'] = nearest_temps
         
-        logger.info(f"Temperaturinterpolation abgeschlossen: {len(result_gdf)} Punkte")
+        logger.info(f"Temperature interpolation completed: {len(result_gdf)} points")
         return result_gdf
     
     def _get_stations_in_area(self, geometry: Union[Point, Polygon, MultiPolygon]) -> gpd.GeoDataFrame:
         """
-        Ruft alle Wetterstationen in einem Gebiet ab.
+        Retrieves all weather stations in a given area.
         
         Args:
-            geometry: Shapely-Geometrie
+            geometry: Shapely geometry
             
         Returns:
-            GeoDataFrame mit Stationsdaten
+            GeoDataFrame with station data
         """
-        # Buffer um die Geometrie hinzufügen
-        buffered_geometry = geometry.buffer(self.buffer_distance / 111000)  # Konvertiere Meter zu Grad
-        logger.info(f"Geometrie mit {self.buffer_distance}m Buffer erweitert")
+        # Convert geometry to projected CRS for buffer operation
+        if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            geometry_proj = geometry.to_crs(CRS_CONFIG["PROCESSING"])
+        else:
+            geometry_proj = gpd.GeoSeries([geometry], crs=CRS_CONFIG["GEOGRAPHIC"]).to_crs(CRS_CONFIG["PROCESSING"])[0]
         
-        # Bounding Box aus erweiterter Geometrie erstellen
+        # Add buffer in meters
+        buffered_geometry = geometry_proj.buffer(self.buffer_distance)
+        logger.info(f"Geometry extended with {self.buffer_distance}m buffer")
+        
+        # Back to input CRS for bounding box
+        buffered_geometry = gpd.GeoSeries([buffered_geometry], crs=CRS_CONFIG["PROCESSING"]).to_crs(CRS_CONFIG["GEOGRAPHIC"])[0]
+        
+        # Create bounding box from extended geometry
         bbox = self._get_bounding_box_from_geometry(buffered_geometry)
-        logger.info(f"Bounding Box: {bbox}")
+        logger.info(f"Bounding box: {bbox}")
         
-        # Request für stündliche Temperaturdaten erstellen
+        # Create request for hourly temperature data
         request = DwdObservationRequest(
             parameters=DWD_TEMPERATURE_PARAMETERS,
-            start_date="2024-01-01",  # Kurzer Zeitraum für Stationssuche
+            start_date="2024-01-01",  # Short period for station search
             end_date="2024-01-02",
             settings=self.settings,
         )
         
-        # Alle Stationen abrufen
+        # Retrieve all stations
         stations_df = request.all().df
         
         if stations_df.is_empty():
-            logger.error("Keine Stationen verfügbar!")
+            logger.error("No stations available!")
             return gpd.GeoDataFrame()
         
-        # Stationen innerhalb der Bounding Box filtern
+        # Filter stations within the bounding box
         stations_in_bbox = stations_df.filter(
             (stations_df["latitude"] >= bbox['min_lat']) &
             (stations_df["latitude"] <= bbox['max_lat']) &
@@ -232,237 +257,193 @@ class BerlinWeatherService:
         )
         
         if stations_in_bbox.is_empty():
-            logger.error("Keine Stationen in der Bounding Box verfügbar!")
+            logger.error("No stations available in the bounding box!")
             return gpd.GeoDataFrame()
         
-        # Als GeoDataFrame konvertieren
-        # CRS der Geometrie ermitteln (Standard: WGS84 falls nicht definiert)
-        geometry_crs = getattr(geometry, 'crs', "EPSG:4326")
-        
+        # As GeoDataFrame with input CRS
         stations_gdf = gpd.GeoDataFrame(
             stations_in_bbox.to_pandas(),
             geometry=gpd.points_from_xy(
                 stations_in_bbox["longitude"],
                 stations_in_bbox["latitude"]
             ),
-            crs=geometry_crs
+            crs=CRS_CONFIG["GEOGRAPHIC"]
         )
-        
-        # Stationen innerhalb der erweiterten Geometrie filtern
-        if buffered_geometry is not None:
-            # Geometrie in das gleiche CRS wie die Stationen konvertieren falls nötig
-            if geometry_crs != stations_gdf.crs:
-                buffered_geometry = buffered_geometry.to_crs(stations_gdf.crs)
-            
-            # Stationen innerhalb der Geometrie filtern
-            stations_in_geometry = stations_gdf[stations_gdf.geometry.within(buffered_geometry)]
-            
-            if stations_in_geometry.empty:
-                logger.error("Keine Stationen innerhalb der erweiterten Geometrie gefunden!")
-                return gpd.GeoDataFrame()
-            
-            stations_gdf = stations_in_geometry
         
         return stations_gdf
     
-    def _get_temperature_data(self, station_ids: list, start_time: datetime, end_time: datetime) -> gpd.GeoDataFrame:
-        """
-        Ruft Temperaturdaten für gegebene Stationen und Zeitraum ab.
-        
-        Args:
-            station_ids: Liste der Stations-IDs
-            start_time: Startzeitpunkt
-            end_time: Endzeitpunkt
-            
-        Returns:
-            GeoDataFrame mit Temperaturdaten
-        """
-        logger.info(f"Lade Temperaturdaten für {len(station_ids)} Stationen "
-                   f"von {start_time} bis {end_time}")
-        
-        # Request für Temperaturdaten erstellen
-        temp_request = DwdObservationRequest(
-            parameters=DWD_TEMPERATURE_PARAMETERS,
-            start_date=start_time.strftime("%Y-%m-%d %H:%M:%S"),
-            end_date=end_time.strftime("%Y-%m-%d %H:%M:%S"),
-            settings=self.settings,
-        ).filter_by_station_id(station_id=station_ids)
-        
-        # Temperaturdaten abrufen
-        values_df = temp_request.values.all().df
-        
-        if values_df.is_empty():
-            logger.error("Keine Temperaturdaten verfügbar!")
-            return gpd.GeoDataFrame()
-        
-        # Als Pandas DataFrame konvertieren
-        values_pandas = values_df.to_pandas()
-        
-        return values_pandas
-    
-    def _find_closest_measurements(
+    def _get_temperature_data_for_period(
         self, 
-        stations_gdf: gpd.GeoDataFrame, 
-        target_timestamp: datetime
-    ) -> gpd.GeoDataFrame:
+        station_ids: list, 
+        start_date: datetime, 
+        end_date: datetime
+    ) -> pd.DataFrame:
         """
-        Findet für jede Station die Messung, die am nächsten am Zielzeitpunkt liegt.
+        Retrieves temperature data for a period.
         
         Args:
-            stations_gdf: GeoDataFrame mit allen Stationsmessungen
-            target_timestamp: Zielzeitpunkt
+            station_ids: List of station IDs
+            start_date: Start date
+            end_date: End date
             
         Returns:
-            GeoDataFrame mit einer Messung pro Station (nächste zum Zielzeitpunkt)
+            DataFrame with temperature data
         """
-        closest_measurements = []
+        logger.info(f"Loading temperature data for {len(station_ids)} stations from {start_date} to {end_date}")
         
-        for station_id in stations_gdf['station_id'].unique():
-            station_data = stations_gdf[stations_gdf['station_id'] == station_id]
-            
-            # Zeitdifferenz zu jedem Messzeitpunkt berechnen
-            station_data = station_data.copy()
-            
-            # Datetime-Objekte konvertieren und Zeitzonen behandeln
-            station_dates = pd.to_datetime(station_data['date'])
-            
-            # Falls station_dates Zeitzonen haben, target_timestamp auch mit Zeitzone versehen
-            if station_dates.dt.tz is not None:
-                # Target timestamp mit gleicher Zeitzone versehen
-                target_tz_aware = target_timestamp.replace(tzinfo=station_dates.dt.tz)
-            else:
-                # Falls keine Zeitzonen, beide zeitzonenfrei machen
-                station_dates = station_dates.dt.tz_localize(None)
-                target_tz_aware = target_timestamp
-            
-            station_data['time_diff'] = abs(station_dates - target_tz_aware)
-            
-            # Messung mit minimaler Zeitdifferenz finden
-            closest_idx = station_data['time_diff'].idxmin()
-            closest_measurement = station_data.loc[closest_idx]
-            
-            # Zeitdifferenz in Minuten für Logging
-            time_diff_minutes = closest_measurement['time_diff'].total_seconds() / 60
-            
-            logger.info(f"Station {station_id}: Nächste Messung um {closest_measurement['date']} "
-                       f"(Differenz: {time_diff_minutes:.1f} Minuten)")
-            
-            closest_measurements.append(closest_measurement)
-        
-        # Als GeoDataFrame zusammenfassen
-        result_gdf = gpd.GeoDataFrame(
-            closest_measurements,
-            crs=stations_gdf.crs
+        # Create request for hourly temperature data
+        request = DwdObservationRequest(
+            parameters=DWD_TEMPERATURE_PARAMETERS,
+            start_date=start_date,
+            end_date=end_date,
+            settings=self.settings,
         )
         
-        # Zeitdifferenz-Spalte entfernen
-        if 'time_diff' in result_gdf.columns:
-            result_gdf = result_gdf.drop('time_diff', axis=1)
+        # Retrieve data for the filtered stations
+        temp_data = request.filter_by_station_id(station_ids).values.all().df
         
-        return result_gdf
+        if temp_data.is_empty():
+            logger.error("No temperature data available!")
+            return pd.DataFrame()
+        
+        # Convert to Pandas DataFrame
+        temp_df = temp_data.to_pandas()
+        
+        logger.info(f"Successfully: {len(temp_df)} temperature measurements loaded")
+        return temp_df
+    
+    def _calculate_station_averages(
+        self,
+        stations_gdf: gpd.GeoDataFrame,
+        temp_data: pd.DataFrame
+    ) -> gpd.GeoDataFrame:
+        """
+        Calculates average temperatures per station.
+        
+        Args:
+            stations_gdf: GeoDataFrame with station data
+            temp_data: DataFrame with temperature data
+            
+        Returns:
+            GeoDataFrame with averaged temperatures
+        """
+        logger.info("Calculating average temperatures per station")
+        
+        if temp_data.empty:
+            return gpd.GeoDataFrame()
+        
+        # Calculate average temperatures and standard deviation per station
+        station_stats = temp_data.groupby('station_id').agg({
+            'value': ['mean', 'std', 'count']
+        })
+        station_stats.columns = ['ground_temp', 'temp_std', 'measurement_count']
+        station_stats = station_stats.reset_index()
+        
+        # Merge with station data
+        stations_with_temp = stations_gdf.merge(
+            station_stats,
+            left_on='station_id',
+            right_on='station_id',
+            how='inner'
+        )
+        
+        # Add period of measurements
+        stations_with_temp['period_start'] = temp_data['date'].min()
+        stations_with_temp['period_end'] = temp_data['date'].max()
+        
+        logger.info(f"Average temperatures calculated for {len(stations_with_temp)} stations")
+        
+        # Output statistics
+        for _, station in stations_with_temp.iterrows():
+            logger.info(
+                f"Station {station['station_id']} ({station['name']}): "
+                f"Ø {station['ground_temp']:.1f}°C "
+                f"({station['measurement_count']} measurements, "
+                f"σ={station['temp_std']:.1f}°C)"
+            )
+        
+        return stations_with_temp
     
     def get_weather_data(
         self,
         geometry: Union[Point, Polygon, MultiPolygon, str, Dict[str, Any]],
-        timestamp: datetime,
+        start_date: datetime,
+        end_date: datetime,
         interpolate: bool = None,
         resolution: float = None
     ) -> gpd.GeoDataFrame:
         """
-        Ruft Temperaturdaten für einen spezifischen Zeitpunkt ab.
+        Retrieves weather data for a geometry and time period.
         
         Args:
-            geometry: Shapely-Geometrie oder GeoJSON (String/Dict)
-            timestamp: Spezifischer Zeitpunkt für die Datenabfrage
-            interpolate: Ob die Daten interpoliert werden sollen (Standard aus Config)
-            resolution: Auflösung des Interpolationsrasters in Metern (Standard aus Config)
+            geometry: Geometry as Shapely object, GeoJSON string, or dictionary
+            start_date: Start date
+            end_date: End date
+            interpolate: Whether to interpolate (default from config)
+            resolution: Resolution of the interpolation grid in meters (default from config)
             
         Returns:
-            GeoDataFrame mit Temperaturdaten für den spezifischen Zeitpunkt
+            GeoDataFrame with temperature data
         """
-        # Config-Werte als Standard verwenden
-        if interpolate is None:
-            interpolate = DWD_INTERPOLATE_BY_DEFAULT
-        if resolution is None:
-            resolution = DWD_INTERPOLATION_RESOLUTION
-            
-        logger.info(f"Lade Wetterdaten für Geometrie und Zeitpunkt {timestamp}")
-        logger.info(f"Buffer: {self.buffer_distance}m, Auflösung: {resolution}m, Interpolation: {interpolate}")
+        # Parameter set
+        interpolate = self.interpolate_by_default if interpolate is None else interpolate
+        resolution = self.interpolation_resolution if resolution is None else resolution
         
-        # GeoJSON zu Shapely-Geometrie konvertieren falls nötig
+        logger.info(f"Loading weather data for period {start_date} to {end_date}")
+        logger.info(f"Buffer: {self.buffer_distance}m, Resolution: {resolution}m, Interpolation: {interpolate}")
+        
+        # Create geometry from input
         if isinstance(geometry, (str, dict)):
             geometry = self._create_geometry_from_geojson(geometry)
         
-        # Stationen im Gebiet finden
+        # Retrieve stations in area
         stations_gdf = self._get_stations_in_area(geometry)
         
         if stations_gdf.empty:
             return gpd.GeoDataFrame()
         
-        # Stations-IDs extrahieren
-        station_ids = stations_gdf["station_id"].tolist()
-        
-        # Tag für die DWD-Abfrage bestimmen
-        date = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_time = date
-        end_time = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        # Temperaturdaten abrufen
-        values_pandas = self._get_temperature_data(station_ids, start_time, end_time)
-        
-        if values_pandas.empty:
-            return gpd.GeoDataFrame()
-        
-        # Mit Stationsdaten zusammenführen
-        result_gdf = stations_gdf.merge(
-            values_pandas,
-            left_on="station_id",
-            right_on="station_id",
-            how="inner"
+        # Retrieve temperature data for the period
+        temp_data = self._get_temperature_data_for_period(
+            station_ids=stations_gdf['station_id'].tolist(),
+            start_date=start_date,
+            end_date=end_date
         )
         
-        # Spalten bereinigen und sortieren
-        columns_to_keep = [
-            "station_id", "name", "latitude", "longitude", "height",
-            "geometry", "date", "value", "quality", "parameter"
-        ]
-        
-        result_gdf = result_gdf[columns_to_keep]
-        
-        # Nach Stations-ID und Datum sortieren
-        result_gdf = result_gdf.sort_values(["station_id", "date"])
-        
-        logger.info(f"Erfolgreich: {len(result_gdf)} Temperaturmessungen für "
-                   f"{len(result_gdf['station_id'].unique())} Stationen")
-        
-        # Nächste Messung zum Zielzeitpunkt für jede Station finden
-        logger.info(f"Suche nächste Messungen zum Zeitpunkt {timestamp}")
-        timestamp_data = self._find_closest_measurements(result_gdf, timestamp)
-        
-        if timestamp_data.empty:
-            logger.error("Keine Messungen in der Nähe des Zielzeitpunkts gefunden!")
+        if temp_data.empty:
             return gpd.GeoDataFrame()
         
-        logger.info(f"Gefunden: {len(timestamp_data)} Messungen nahe {timestamp}")
+        # Calculate average temperatures per station
+        stations_with_temp = self._calculate_station_averages(stations_gdf, temp_data)
         
-        # Interpolation durchführen falls gewünscht
-        if interpolate and len(timestamp_data) > 0:
-            logger.info("Starte Temperaturinterpolation...")
+        if stations_with_temp.empty:
+            return gpd.GeoDataFrame()
+        
+        logger.info(f"Returning {len(stations_with_temp)} stations with average temperatures")
+        
+        # Optional: Perform interpolation
+        if interpolate:
+            logger.info("Starting temperature interpolation of average values...")
             
-            # Interpolationsraster erstellen
+            # Create interpolation grid
             grid_gdf = self._create_interpolation_grid(geometry, resolution)
             
-            # Interpolation durchführen
-            interpolated_gdf = self._interpolate_temperature(timestamp_data, grid_gdf, self.interpolation_method)
+            # Interpolate temperatures
+            result_gdf = self._interpolate_temperature(
+                stations_with_temp,
+                grid_gdf,
+                method=self.interpolation_method
+            )
             
-            # Zusätzliche Metadaten hinzufügen
-            interpolated_gdf['date'] = timestamp
-            interpolated_gdf['source'] = 'interpolated_ground_data'
-            interpolated_gdf['n_stations'] = len(timestamp_data['station_id'].unique())
-            interpolated_gdf['resolution_m'] = resolution
-            interpolated_gdf['target_timestamp'] = timestamp
+            # Add metadata
+            result_gdf['source'] = 'interpolated'
+            result_gdf['n_stations'] = len(stations_with_temp)
+            result_gdf['resolution_m'] = resolution
+            result_gdf['period_start'] = stations_with_temp['period_start'].iloc[0]
+            result_gdf['period_end'] = stations_with_temp['period_end'].iloc[0]
             
-            logger.info(f"Interpolation abgeschlossen: {len(interpolated_gdf)} Punkte erstellt")
-            return interpolated_gdf
+            logger.info(f"Interpolation of average values completed: {len(result_gdf)} points created")
+            return result_gdf
         
-        return timestamp_data 
+        # If no interpolation: Return station data
+        stations_with_temp['source'] = 'station'
+        return stations_with_temp 

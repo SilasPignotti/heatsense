@@ -1,8 +1,8 @@
 """
-WFS-Downloader Klasse für verschiedene Geodatendienste.
+WFS downloader class for various geodata services.
 
-Diese Klasse ermöglicht das einfache Herunterladen von Geodaten über WFS-Services
-mit konfigurierbaren Endpunkten und verschiedenen Ausgabeformaten.
+This class enables easy downloading of geodata via WFS services
+with configurable endpoints and various output formats.
 """
 
 import logging
@@ -11,18 +11,17 @@ from typing import Dict, Any, Optional, Union
 from urllib.parse import urlencode
 import requests
 import geopandas as gpd
-from datetime import datetime
 
 
-class WFSDownloader:
+class WFSDataDownloader:
     """
-    Klasse zum Download von Geodaten über WFS-Services.
+    Class for downloading geodata via WFS services.
     
     Attributes:
-        config: WFS-Konfiguration mit Endpunkten
-        headers: HTTP-Headers für Requests
-        timeout: Timeout für HTTP-Requests
-        logger: Logger-Instanz
+        config: WFS configuration with endpoints
+        headers: HTTP headers for requests
+        timeout: Timeout for HTTP requests
+        logger: Logger instance
     """
     
     def __init__(
@@ -33,30 +32,30 @@ class WFSDownloader:
         log_file: Optional[Path] = None
     ):
         """
-        Initialisiert den WFS-Downloader.
+        Initializes the WFSDataDownloader.
         
         Args:
-            config: WFS-Konfiguration (aus wfs_config.py)
-            headers: Optionale HTTP-Headers
-            timeout: Timeout in Sekunden
-            log_file: Optionaler Pfad für Log-Datei
+            config: WFS configuration (from wfs_config.py)
+            headers: Optional HTTP headers
+            timeout: Timeout in seconds
+            log_file: Optional path for log file
         """
         self.config = config
         self.timeout = timeout
         self.logger = self._setup_logger(log_file)
         
-        # Standard-Headers falls keine angegeben
+        # Default headers if none provided
         self.headers = headers or {
             "User-Agent": "Urban-Heat-Island-Analyzer/1.0",
             "Accept": "application/json,application/geojson"
         }
     
     def _setup_logger(self, log_file: Optional[Path] = None) -> logging.Logger:
-        """Richtet den Logger ein."""
+        """Sets up the logger."""
         logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         logger.setLevel(logging.INFO)
         
-        # Handler für Konsole
+        # Console handler
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         console_formatter = logging.Formatter(
@@ -65,7 +64,7 @@ class WFSDownloader:
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         
-        # Handler für Datei (falls angegeben)
+        # File handler (if provided)
         if log_file:
             log_file.parent.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(log_file)
@@ -80,24 +79,24 @@ class WFSDownloader:
     
     def build_wfs_url(self, endpoint_name: str, **kwargs) -> str:
         """
-        Baut die WFS-URL mit den entsprechenden Parametern.
+        Builds the WFS URL with the appropriate parameters.
         
         Args:
-            endpoint_name: Name des Endpunkts aus der Konfiguration
-            **kwargs: Zusätzliche Parameter für die URL
+            endpoint_name: Name of the endpoint from the configuration
+            **kwargs: Additional parameters for the URL
             
         Returns:
-            Vollständige WFS-URL
+            Complete WFS URL
             
         Raises:
-            KeyError: Wenn Endpunkt nicht in Konfiguration gefunden
+            KeyError: If endpoint not found in configuration
         """
         if endpoint_name not in self.config:
-            raise KeyError(f"Endpunkt '{endpoint_name}' nicht in Konfiguration gefunden")
+            raise KeyError(f"Endpoint '{endpoint_name}' not found in configuration")
         
         endpoint_config = self.config[endpoint_name]
         
-        # Basis-Parameter
+        # Base parameters
         params = {
             'service': endpoint_config['service'],
             'version': endpoint_config['version'],
@@ -107,7 +106,7 @@ class WFSDownloader:
             'srsName': endpoint_config['srsName']
         }
         
-        # Zusätzliche Parameter hinzufügen
+        # Add additional parameters
         params.update(kwargs)
         
         return f"{endpoint_config['url']}?{urlencode(params)}"
@@ -119,25 +118,25 @@ class WFSDownloader:
         **kwargs
     ) -> bool:
         """
-        Lädt Daten vom WFS-Service herunter und speichert sie.
+        Downloads data from the WFS service and saves it.
         
         Args:
-            endpoint_name: Name des Endpunkts aus der Konfiguration
-            output_path: Pfad für die Ausgabedatei
-            **kwargs: Zusätzliche Parameter für die WFS-URL
+            endpoint_name: Name of the endpoint from the configuration
+            output_path: Path for the output file
+            **kwargs: Additional parameters for the WFS URL
             
         Returns:
-            True wenn erfolgreich, False sonst
+            True if successful, False otherwise
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            # WFS-URL bauen
+            # Build WFS URL
             wfs_url = self.build_wfs_url(endpoint_name, **kwargs)
-            self.logger.info(f"Lade Daten von: {wfs_url}")
+            self.logger.info(f"Downloading data from: {wfs_url}")
             
-            # Daten herunterladen
+            # Download data
             response = requests.get(
                 wfs_url,
                 headers=self.headers,
@@ -145,42 +144,42 @@ class WFSDownloader:
             )
             response.raise_for_status()
             
-            # Prüfe Content-Type
+            # Check content type
             content_type = response.headers.get('content-type', '')
             if 'json' in content_type or 'geojson' in content_type:
-                # Als GeoJSON speichern
+                # Save as GeoJSON
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
-                self.logger.info(f"Daten erfolgreich gespeichert: {output_path}")
+                self.logger.info(f"Data successfully saved: {output_path}")
                 return True
             else:
-                self.logger.error(f"Unerwartetes Antwortformat: {content_type}")
+                self.logger.error(f"Unexpected response format: {content_type}")
                 return False
                 
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Fehler beim Download: {e}")
+            self.logger.error(f"Download error: {e}")
             return False
         except Exception as e:
-            self.logger.error(f"Unerwarteter Fehler: {e}")
+            self.logger.error(f"Unexpected error: {e}")
             return False
     
     def validate_geojson(self, file_path: Union[str, Path]) -> bool:
         """
-        Validiert eine GeoJSON-Datei.
+        Validates a GeoJSON file.
         
         Args:
-            file_path: Pfad zur GeoJSON-Datei
+            file_path: Path to the GeoJSON file
             
         Returns:
-            True wenn gültig, False sonst
+            True if valid, False otherwise
         """
         try:
             gdf = gpd.read_file(file_path)
-            self.logger.info(f"GeoJSON validiert: {len(gdf)} Features gefunden")
+            self.logger.info(f"GeoJSON validated: {len(gdf)} features found")
             self.logger.info(f"CRS: {gdf.crs}")
             return True
         except Exception as e:
-            self.logger.error(f"GeoJSON-Validierung fehlgeschlagen: {e}")
+            self.logger.error(f"GeoJSON validation failed: {e}")
             return False
     
     def download_and_validate(
@@ -191,22 +190,22 @@ class WFSDownloader:
         **kwargs
     ) -> bool:
         """
-        Lädt Daten herunter und validiert sie optional.
+        Downloads data and optionally validates it.
         
         Args:
-            endpoint_name: Name des Endpunkts aus der Konfiguration
-            output_path: Pfad für die Ausgabedatei
-            validate: Ob GeoJSON validiert werden soll
-            **kwargs: Zusätzliche Parameter für die WFS-URL
+            endpoint_name: Name of the endpoint from the configuration
+            output_path: Path for the output file
+            validate: Whether to validate the GeoJSON
+            **kwargs: Additional parameters for the WFS URL
             
         Returns:
-            True wenn erfolgreich, False sonst
+            True if successful, False otherwise
         """
-        # Daten herunterladen
+        # Download data
         if not self.download_data(endpoint_name, output_path, **kwargs):
             return False
         
-        # Optional validieren
+        # Optionally validate
         if validate:
             if not self.validate_geojson(output_path):
                 return False
@@ -215,27 +214,27 @@ class WFSDownloader:
     
     def get_available_endpoints(self) -> list:
         """
-        Gibt alle verfügbaren Endpunkte zurück.
+        Returns all available endpoints.
         
         Returns:
-            Liste der Endpunkt-Namen
+            List of endpoint names
         """
         return list(self.config.keys())
     
     def get_endpoint_info(self, endpoint_name: str) -> Dict[str, Any]:
         """
-        Gibt Informationen zu einem Endpunkt zurück.
+        Returns information about an endpoint.
         
         Args:
-            endpoint_name: Name des Endpunkts
+            endpoint_name: Name of the endpoint
             
         Returns:
-            Endpunkt-Konfiguration
+            Endpoint configuration
             
         Raises:
-            KeyError: Wenn Endpunkt nicht gefunden
+            KeyError: If endpoint not found
         """
         if endpoint_name not in self.config:
-            raise KeyError(f"Endpunkt '{endpoint_name}' nicht gefunden")
+            raise KeyError(f"Endpoint '{endpoint_name}' not found")
         
         return self.config[endpoint_name].copy() 
