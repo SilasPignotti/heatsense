@@ -1,6 +1,6 @@
 # Urban Heat Island Analyzer
 
-Ein Python-basiertes System zur Analyse von Urban Heat Islands (UHI) basierend auf Wetterdaten, Landnutzung und geografischen Grenzen.
+Ein Python-basiertes System zur Analyse von Urban Heat Islands (UHI) basierend auf Satellitendaten, Wetterdaten, Landnutzung und geografischen Grenzen.
 
 ## 🏗️ Projektstruktur
 
@@ -19,11 +19,12 @@ urban_heat_island_analyzer/
 │   └── wfs_downloader.md          # WFSDataDownloader-Dokumentation
 ├── logs/                         # Log-Dateien
 ├── scripts/                      # Ausführbare Scripts
-│   └── data_processing/          # Datenverarbeitung
-│       ├── download_berlin_boundaries.py
-│       ├── download_berlin_weather_data.py
-│       ├── download_corine_landcover.py
-│       └── analyze_heat_islands.py
+│   ├── data_processing/          # Datenverarbeitung
+│   │   ├── download_berlin_boundaries.py
+│   │   ├── download_berlin_weather_data.py
+│   │   ├── download_corine_landcover.py
+│   │   └── analyze_heat_islands.py
+│   └── setup_earth_engine.py     # Google Earth Engine Setup
 ├── src/                          # Quellcode
 │   └── uhi_analyzer/             # Hauptpaket
 │       ├── config/               # Konfiguration
@@ -56,6 +57,21 @@ cd urban_heat_island_analyzer
 uv sync
 ```
 
+### Google Earth Engine Setup (für Satellitendaten)
+
+Für die Analyse mit echten Satellitendaten ist eine Google Earth Engine Authentifizierung erforderlich:
+
+```bash
+# Earth Engine Setup ausführen
+uv run scripts/setup_earth_engine.py
+```
+
+**Hinweis:** Sie benötigen ein Google-Konto und müssen sich für Google Earth Engine registrieren:
+1. Besuchen Sie https://earthengine.google.com/
+2. Registrieren Sie sich für Earth Engine
+3. Warten Sie auf die Genehmigung (normalerweise 1-2 Tage)
+4. Führen Sie das Setup-Script aus
+
 ### Konfiguration
 
 1. **Umgebungsvariablen setzen** (optional):
@@ -86,12 +102,73 @@ uv run scripts/data_processing/download_berlin_weather_data.py --date 2024-06-15
 uv run scripts/data_processing/download_corine_landcover.py --year 2018
 ```
 
-#### 4. Urban Heat Island Analyse
+#### 4. Urban Heat Island Analyse mit Satellitendaten
 ```bash
 uv run scripts/data_processing/analyze_heat_islands.py \
   --start-date 2023-07-01 \
   --end-date 2023-07-31 \
   --cloud-threshold 15
+```
+
+## 🌍 Satellitenbasierte UHI-Analyse
+
+Das System unterstützt jetzt echte Satellitendaten-Analyse mit Google Earth Engine:
+
+### Features
+- **Landsat 8 Thermal Data**: Verwendet Landsat 8 Collection 2 Tier 1 Level 2 Daten
+- **Cloud Filtering**: Automatische Filterung von wolkenbedeckten Szenen
+- **Temperature Extraction**: Extraktion von Oberflächentemperaturen
+- **Hotspot Detection**: Identifikation von Wärmeinseln
+- **Land Use Correlation**: Korrelation zwischen Landnutzung und Temperaturen
+- **Temporal Analysis**: Zeitliche Trendanalyse
+- **Ground Validation**: Validierung mit Wetterstationsdaten
+
+### Beispiel: Vollständige Satellitenanalyse
+
+```python
+from uhi_analyzer import UrbanHeatIslandAnalyzer
+from datetime import date
+
+# Analyzer mit Satellitendaten initialisieren
+analyzer = UrbanHeatIslandAnalyzer(cloud_cover_threshold=20)
+
+# Vollständige UHI-Analyse mit Satellitendaten
+results = analyzer.analyze_heat_islands(
+    city_boundary="data/raw/boundaries/berlin_admin_boundaries.geojson",
+    date_range=(date(2023, 7, 1), date(2023, 7, 31)),
+    landuse_data="data/raw/landcover/berlin_corine_landcover_2018.geojson",
+    weather_stations="data/processed/weather/berlin_weather_stations.geojson"  # Optional
+)
+
+# Ergebnisse visualisieren
+analyzer.visualize_results(results, "uhi_satellite_analysis.png")
+
+# Detaillierte Ergebnisse anzeigen
+print(f"Temperaturen analysiert: {len(results['temperature_statistics'])}")
+print(f"Hotspots identifiziert: {len(results['hot_spots'])}")
+print(f"Landnutzungskorrelationen: {len(results['land_use_correlation'])}")
+
+# Mitigationsempfehlungen
+for rec in results['mitigation_recommendations']:
+    print(f"{rec['type']}: {rec['description']} (Priorität: {rec['priority']})")
+```
+
+### Konfigurationsoptionen
+
+```python
+# Erweiterte Konfiguration
+analyzer = UrbanHeatIslandAnalyzer(
+    cloud_cover_threshold=15,  # Max. 15% Wolkenbedeckung
+    log_file="logs/satellite_analysis.log"
+)
+
+# Analyse mit angepassten Parametern
+results = analyzer.analyze_heat_islands(
+    city_boundary="berlin.geojson",
+    date_range=(date(2023, 6, 1), date(2023, 8, 31)),  # Sommer 2023
+    landuse_data="corine_2018.geojson",
+    weather_stations="weather_stations.geojson"  # Für Validierung
+)
 ```
 
 ## 📊 Datenmodule

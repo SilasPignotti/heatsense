@@ -86,9 +86,9 @@ class UrbanHeatIslandAnalyzer:
         try:
             if not ee.data._credentials:
                 ee.Authenticate()
-            ee.Initialize()
+            ee.Initialize(project='urban-heat-island-analyzer')
             self.initialized = True
-            self.logger.info("Google Earth Engine successfully initialized")
+            self.logger.info("Google Earth Engine successfully initialized with project: urban-heat-island-analyzer")
         except Exception as e:
             self.logger.error(f"Failed to initialize Earth Engine: {str(e)}")
             raise
@@ -189,11 +189,16 @@ class UrbanHeatIslandAnalyzer:
             ee_geometry = ee.Geometry.Rectangle(geometry.bounds)
             self.logger.info(f"Searching for Landsat scenes in area: {geometry.bounds}")
 
+            # Convert dates to ISO format strings for Earth Engine
+            start_date_str = date_range[0].isoformat()
+            end_date_str = date_range[1].isoformat()
+            self.logger.info(f"Date range: {start_date_str} to {end_date_str}")
+
             # Get Landsat collection
             collection = (
                 ee.ImageCollection(UHI_LANDSAT_COLLECTION)
                 .filterBounds(ee_geometry)
-                .filterDate(date_range[0], date_range[1])
+                .filterDate(start_date_str, end_date_str)
                 .filter(ee.Filter.lt('CLOUD_COVER', self.cloud_threshold))
                 .select([UHI_TEMPERATURE_BAND])  # Surface temperature band
             )
