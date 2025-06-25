@@ -59,18 +59,23 @@ uv sync
 
 ### Google Earth Engine Setup (für Satellitendaten)
 
-Für die Analyse mit echten Satellitendaten ist eine Google Earth Engine Authentifizierung erforderlich:
+Für die Analyse mit echten Satellitendaten ist eine Google Earth Engine Konfiguration erforderlich:
 
 ```bash
-# Earth Engine Setup ausführen
-uv run scripts/setup_earth_engine.py
+# 1. Environment-Konfiguration erstellen
+cp .env.example .env
+# Bearbeiten Sie .env und setzen Sie Ihre Google Earth Engine Projekt-ID
+
+# 2. Earth Engine Authentifizierung
+earthengine authenticate
 ```
 
-**Hinweis:** Sie benötigen ein Google-Konto und müssen sich für Google Earth Engine registrieren:
-1. Besuchen Sie https://earthengine.google.com/
-2. Registrieren Sie sich für Earth Engine
-3. Warten Sie auf die Genehmigung (normalerweise 1-2 Tage)
-4. Führen Sie das Setup-Script aus
+**Hinweis:** Sie benötigen ein Google Cloud Project mit Earth Engine API:
+1. Besuchen Sie https://console.cloud.google.com/
+2. Erstellen Sie ein neues Projekt oder wählen Sie ein bestehendes
+3. Aktivieren Sie die Earth Engine API
+4. Registrieren Sie sich für Google Earth Engine (https://earthengine.google.com/)
+5. Tragen Sie Ihre Projekt-ID in die .env Datei ein
 
 ### Konfiguration
 

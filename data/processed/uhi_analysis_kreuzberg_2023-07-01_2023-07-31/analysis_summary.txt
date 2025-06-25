@@ -1,0 +1,20 @@
+Urban Heat Island Analysis Results
+========================================
+
+Analysis completed: 2025-06-26
+Period: 2023-07-01 to 2023-07-31
+Boundary data: kreuzberg_boundary.geojson
+Land cover data: landcover_2018.geojson
+Weather data: weather_2023-07-01_to_2023-07-31.geojson
+Cloud threshold: 20%
+
+Temperature Analysis:
+- Grid cells: 3018
+- Valid temperatures: 3018
+- Mean temperature: 31.7°C
+- Temperature range: 8.2°C - 44.4°C
+
+Hotspots identified: 298
+
+Recommendations:
+1. Increase green coverage in identified hot spots

@@ -8,4 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+
+# Large processed data files
 data/processed/weather/berlin_temperature_20220101_to_20221231_interpolated.geojson

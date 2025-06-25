@@ -5,7 +5,17 @@ This module contains all configuration settings, constants, and utility function
 for the UHI analyzer application.
 """
 
+import os
 from pathlib import Path
+from typing import List
+
+# Load environment variables from .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv not installed, skip loading .env file
+    pass
 
 # =============================================================================
 # Coordinate Reference Systems (CRS) Configuration
@@ -29,38 +39,62 @@ CRS_CONFIG = {
     "OUTPUT": "EPSG:4326",       # Standard output format (WGS84)
 }
 
-# Legacy constants for backward compatibility
-GEOGRAPHIC_CRS = CRS_CONFIG["GEOGRAPHIC"]
-BERLIN_CRS = CRS_CONFIG["BERLIN"]
-GERMANY_CRS = CRS_CONFIG["GERMANY_WEST"]
-GERMANY_EAST_CRS = CRS_CONFIG["GERMANY_EAST"]
-WEB_MERCATOR_CRS = CRS_CONFIG["WEB_MERCATOR"]
-
 # =============================================================================
 # WFS Configuration
 # =============================================================================
 
 # WFS-Endpunkte für verschiedene Geodatendienste
 WFS_ENDPOINTS = {
-    "berlin_admin_boundaries": {
-        "url": "https://gdi.berlin.de/services/wfs/alkis_land", 
+    "berlin_state_boundary": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_land",
         "service": "WFS",
         "version": "2.0.0",
         "request": "GetFeature",
         "typeName": "alkis_land:landesgrenze",
         "outputFormat": "application/json",
-        "srsName": CRS_CONFIG["GEOGRAPHIC"]
+        "srsName": CRS_CONFIG["GEOGRAPHIC"],
+        "description": "Berlin state administrative boundary"
+    },
+    "berlin_district_boundary": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_bezirke",
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "GetFeature",
+        "typeName": "alkis_bezirke:bezirksgrenzen",
+        "outputFormat": "application/json",
+        "srsName": CRS_CONFIG["GEOGRAPHIC"],
+        "description": "Berlin district administrative boundaries from ALKIS"
+    },
+    "berlin_locality_boundary": {
+        "url": "https://gdi.berlin.de/services/wfs/alkis_ortsteile",
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "GetFeature",
+        "typeName": "alkis_ortsteile:ortsteile",
+        "outputFormat": "application/json",
+        "srsName": CRS_CONFIG["GEOGRAPHIC"],
+        "description": "Berlin locality (Ortsteil) administrative boundaries from ALKIS"
     }
 }
 
 # HTTP-Header für WFS-Requests
 WFS_HEADERS = {
-    "User-Agent": "Urban-Heat-Island-Analyzer/1.0",
-    "Accept": "application/json,application/geojson"
+    "User-Agent": "Python-WFS-Downloader/1.0",
+    "Accept": "application/json,application/geojson,text/xml"
 }
 
-# Timeout-Einstellungen
-WFS_TIMEOUT = 30  # Sekunden
+# WFS Configuration
+WFS_TIMEOUT = 30  # Timeout in seconds
+WFS_MAX_FEATURES = 10000  # Maximum features per request
+WFS_RETRY_ATTEMPTS = 3  # Number of retry attempts on failure
+WFS_RETRY_DELAY = 2  # Delay between retries in seconds
+
+# Supported output formats
+WFS_OUTPUT_FORMATS = {
+    "geojson": "application/json",
+    "gml": "application/gml+xml",
+    "json": "application/json"
+}
 
 # =============================================================================
 # Corine Land Cover Configuration
@@ -77,15 +111,10 @@ CORINE_BASE_URLS = {
     2018: "https://image.discomap.eea.europa.eu/arcgis/rest/services/Corine/CLC2018_WM/MapServer/0"
 }
 
-# Legacy-Konfiguration für Rückwärtskompatibilität (verwendet 2018)
-CORINE_BASE_URL = CORINE_BASE_URLS[2018]
-
 # API Parameters
 DEFAULT_RECORD_COUNT = 1000
 DEFAULT_TIMEOUT = 30
 DEFAULT_OUTPUT_FORMAT = "geojson"
-DEFAULT_OUTPUT_CRS = CRS_CONFIG["GEOGRAPHIC"].split(":")[1]  # "4326"
-DEFAULT_INPUT_CRS = CRS_CONFIG["WEB_MERCATOR"].split(":")[1]  # "3857"
 
 # Corine Land Cover Code zu Land Use Type Mapping
 CORINE_LANDUSE_MAPPING = {
@@ -229,14 +258,14 @@ DWD_INTERPOLATION_RESOLUTION = 30  # Resolution of the interpolation grid in met
 DWD_INTERPOLATION_METHOD = "linear"  # Interpolation method ('linear', 'nearest', 'cubic')
 DWD_INTERPOLATE_BY_DEFAULT = True  # Perform interpolation by default
 
-# CRS-Konfiguration für DWD-Daten
-DWD_INPUT_CRS = CRS_CONFIG["GEOGRAPHIC"]  # CRS of DWD station data
-DWD_PROCESSING_CRS = CRS_CONFIG["PROCESSING"]  # CRS for spatial operations
-DWD_OUTPUT_CRS = CRS_CONFIG["OUTPUT"]  # CRS of output data
+
 
 # =============================================================================
 # UHI Analyzer Configuration
 # =============================================================================
+
+# Google Earth Engine Configuration
+UHI_EARTH_ENGINE_PROJECT = os.getenv("UHI_EARTH_ENGINE_PROJECT", "your-gee-project-id")  # GEE project ID from environment
 
 # Satellite Data Configuration
 UHI_CLOUD_COVER_THRESHOLD = 20  # Maximum acceptable cloud cover percentage (0-100)
@@ -252,8 +281,6 @@ UHI_KELVIN_OFFSET = 273.15  # Kelvin to Celsius conversion
 
 # Analysis Grid Configuration
 UHI_GRID_CELL_SIZE = 100  # Analysis grid cell size in meters
-UHI_GRID_CRS = CRS_CONFIG["WEB_MERCATOR"]  # CRS for grid creation (Web Mercator)
-UHI_OUTPUT_CRS = CRS_CONFIG["OUTPUT"]  # Output CRS (WGS84)
 
 # Hotspot Analysis Configuration
 UHI_HOTSPOT_THRESHOLD = 0.9  # Percentile threshold for hotspot identification
@@ -274,35 +301,4 @@ UHI_LOG_DIR = Path("logs")  # Directory for log files
 UHI_LOG_LEVEL = "INFO"  # Logging level
 
 
-def get_best_corine_year_for_date_range(start_year: int, end_year: int) -> int:
-    """
-    Findet das beste verfügbare Corine-Jahr für einen Datumsbereich.
-    Bevorzugt das neueste verfügbare Jahr innerhalb des Zeitraums.
-    Falls kein Jahr innerhalb des Zeitraums verfügbar ist, nimmt das nächstgelegene Jahr.
-    
-    Args:
-        start_year: Startjahr des Analysezeitraums
-        end_year: Endjahr des Analysezeitraums
-        
-    Returns:
-        Bestes verfügbares Corine-Jahr für den Zeitraum
-        
-    Raises:
-        ValueError: Wenn keine verfügbaren Jahre vorhanden sind oder start_year > end_year
-    """
-    if not CORINE_YEARS:
-        raise ValueError("Keine verfügbaren Corine-Jahre konfiguriert")
-    
-    if start_year > end_year:
-        raise ValueError(f"Startjahr ({start_year}) muss vor Endjahr ({end_year}) liegen")
-    
-    # Finde Jahre innerhalb des Zeitraums
-    years_in_range = [year for year in CORINE_YEARS if start_year <= year <= end_year]
-    
-    if years_in_range:
-        # Nimm das neueste Jahr innerhalb des Zeitraums
-        return max(years_in_range)
-    else:
-        # Falls kein Jahr innerhalb des Zeitraums, nimm das nächstgelegene zum Zeitraum-Mittelpunkt
-        midpoint = (start_year + end_year) / 2
-        return min(CORINE_YEARS, key=lambda x: abs(x - midpoint)) 
+ 

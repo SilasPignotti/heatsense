@@ -1,314 +1,394 @@
-# CorineDataDownloader - Corine Land Cover Data Downloader
+# CorineDataDownloader - Flexible Corine Land Cover Data Downloader
 
 ## Overview
 
-The `CorineDataDownloader` is a specialized downloader for Corine Land Cover data from the European Environment Agency (EEA). The system automatically selects the best available Corine year for a given analysis period and provides UHI-optimized data with land use classifications and impervious surface coefficients.
+The `CorineDataDownloader` is a flexible downloader for Corine Land Cover data from the European Environment Agency (EEA). It automatically selects the best available Corine year for a given analysis period and provides flexible data processing options, including optional Urban Heat Island (UHI) analysis features.
 
-## Supported Years
+## Features
 
-- **1990**: Historical data
-- **2000**: Millennium update
+### 🎯 **Core Capabilities**
+- **Flexible year/period input**: Single year, date range, or specific date
+- **Multiple output formats**: GeoJSON, GPKG, Shapefile, Parquet
+- **Automatic year selection**: Based on data availability
+- **Optional UHI processing**: Specialized land use classifications and impervious surface coefficients
+
+### 📊 **Supported Corine Years**
+- **1990**: Historical baseline
+- **2000**: Millennium update  
 - **2006**: First 6-year update
 - **2012**: Second 6-year update
 - **2018**: Latest available data
 
+### 💾 **Output Formats**
+- `'geojson'` - GeoJSON (default, best for web applications)
+- `'gpkg'` - GeoPackage (efficient for desktop GIS)
+- `'shp'` - ESRI Shapefile (legacy compatibility)
+- `'parquet'` - Apache Parquet (optimized for large datasets)
+
 ## Installation
 
 ```bash
-# Install dependencies
-uv add geopandas requests pyproj
+# Install core dependencies
+uv add geopandas requests pyproj pandas
 ```
 
 ## Basic Usage
 
+### Simple Year-Based Downloads
+
 ```python
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
-from datetime import datetime
 
-# Analysis period (automatically selects best Corine year)
-downloader = CorineDataDownloader(
-    start_date="2020-01-01",
-    end_date="2020-12-31"
-)
+# Single year
+downloader = CorineDataDownloader(2018)
 
-# Using datetime objects
-downloader = CorineDataDownloader(
-    start_date=datetime(2020, 1, 1),
-    end_date=datetime(2020, 12, 31)
-)
+# Year as string
+downloader = CorineDataDownloader("2018")
 
-# Using years only
-downloader = CorineDataDownloader(
-    start_date=2020,
-    end_date=2020
-)
+# Specific date (year extracted automatically)
+downloader = CorineDataDownloader("2018-06-15")
 ```
 
-## Command Line
+### Period-Based Downloads
 
-```bash
-# Analysis period (automatically selects best Corine year)
-uv run scripts/data_processing/download_corine_landcover.py --start-date 2020-01-01 --end-date 2020-12-31
+```python
+# Date range as tuple
+downloader = CorineDataDownloader((2015, 2020))
 
-# Using years only
-uv run scripts/data_processing/download_corine_landcover.py --start-date 2020 --end-date 2020
+# Mixed date formats
+downloader = CorineDataDownloader(("2015", "2020-12-31"))
+
+# The system automatically selects the best available Corine year
+# For period 2015-2020, it would select 2018 (newest available within range)
 ```
 
-## Configuration
+### Download and Save Data
 
-### Environment Variables
+```python
+# Basic download (raw Corine data)
+path = downloader.download_and_save("berlin_boundary.geojson")
 
-```bash
-# HTTP request timeout
-export CORINE_TIMEOUT=30
+# With UHI processing (adds landuse_type and impervious_area columns)
+path = downloader.download_and_save(
+    "berlin_boundary.geojson",
+    process_for_uhi=True
+)
 
-# Default output format
-export CORINE_OUTPUT_FORMAT="json"
-
-# Default CRS
-export CORINE_OUTPUT_CRS="EPSG:4326"
+# Different output format
+path = downloader.download_and_save(
+    "berlin_boundary.geojson",
+    output_format='gpkg',
+    process_for_uhi=True
+)
 ```
-
-### Parameters
-
-- `start_date`: Start date of analysis period (YYYY, YYYY-MM-DD, or datetime)
-- `end_date`: End date of analysis period (YYYY, YYYY-MM-DD, or datetime)
-- `logger`: Logger instance (optional)
 
 ## Advanced Usage
 
-### Download for Specific Area
+### Custom Configuration
 
 ```python
-from pathlib import Path
-
-# Initialize downloader
+# Custom API parameters
 downloader = CorineDataDownloader(
-    start_date="2020-01-01",
-    end_date="2020-12-31"
+    year_or_period=2018,
+    record_count=2000,  # More records per API request
+    timeout=60          # Longer timeout for large areas
 )
-
-# GeoJSON file of the area
-geojson_path = Path("data/raw/boundaries/berlin_admin_boundaries.geojson")
-
-# Download and save data
-output_path = downloader.download_and_save(
-    geojson_path=geojson_path,
-    output_path="data/raw/landcover/berlin_corine_2018.geojson"
-)
-
-print(f"Data saved: {output_path}")
 ```
 
-### Download Only (without saving)
-
-```python
-# Download raw data
-features = downloader.download_for_area(geojson_path)
-print(f"Features downloaded: {len(features)}")
-```
-
-### Extract Bounding Box
-
-```python
-# Extract bounding box from GeoJSON
-bbox = downloader.get_bbox_from_geojson(geojson_path)
-print(f"Bounding Box: {bbox}")
-```
-
-## Output Formats
-
-### GeoJSON File
-
-The downloaded data is saved as GeoJSON with UHI-optimized properties:
-
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [[[13.0, 52.0], [14.0, 52.0], [14.0, 53.0], [13.0, 53.0], [13.0, 52.0]]]
-      },
-      "properties": {
-        "OBJECTID": 1,
-        "CODE_18": "111",
-        "LABEL3": "Continuous urban fabric",
-        "landuse_type": "urban_fabric",
-        "impervious_area": 0.9
-      }
-    }
-  ]
-}
-```
-
-### GeoDataFrame
+### Working with GeoDataFrames
 
 ```python
 import geopandas as gpd
 
-# Load GeoJSON
-gdf = gpd.read_file("data/raw/landcover/berlin_corine_2018.geojson")
+# Load and modify boundary
+boundary = gpd.read_file("study_area.shp")
+boundary_buffered = boundary.buffer(1000)  # 1km buffer
 
-# Show properties
-print(gdf.columns)
-# ['OBJECTID', 'CODE_18', 'LABEL3', 'landuse_type', 'impervious_area', 'geometry']
-
-# Count land use classes
-print(gdf['landuse_type'].value_counts())
-
-# Calculate average impervious area
-print(f"Average impervious area: {gdf['impervious_area'].mean():.2f}")
+# Use GeoDataFrame directly
+downloader = CorineDataDownloader(2018)
+path = downloader.download_and_save(boundary_buffered)
 ```
 
-## Land Use Classes
+### Output Format Options
 
-Corine Land Cover uses a hierarchical classification system optimized for UHI analysis:
+```python
+# Large dataset - use Parquet for efficiency
+path = downloader.download_and_save(
+    "large_study_area.geojson",
+    output_format='parquet',
+    clip_to_boundary=False  # Skip clipping for better performance
+)
 
-### Level 1 (5 Main Categories)
-1. **Artificial surfaces** (1xx)
-2. **Agricultural areas** (2xx)
-3. **Forest and seminatural areas** (3xx)
-4. **Wetlands** (4xx)
-5. **Water bodies** (5xx)
+# GIS compatibility - use GeoPackage
+path = downloader.download_and_save(
+    "study_area.geojson",
+    output_format='gpkg'
+)
 
-### UHI-Optimized Categories
-- **urban_fabric**: Continuous and discontinuous urban fabric
-- **industrial_commercial**: Industrial or commercial units
-- **transport**: Road and rail networks, ports, airports
-- **artificial_non_urban**: Mineral extraction, dump sites, construction
-- **green_urban**: Green urban areas, sport and leisure facilities
-- **agricultural**: Arable land, permanent crops, pastures
-- **forest**: Broad-leaved, coniferous, and mixed forest
-- **natural_vegetation**: Natural grasslands, moors, heathland
-- **wetlands**: Inland and coastal wetlands
-- **water**: Water bodies
+# Web applications - use GeoJSON
+path = downloader.download_and_save(
+    "study_area.geojson",
+    output_format='geojson'
+)
+```
+
+### Direct Data Processing
+
+```python
+# Download raw data without saving
+features = downloader.download_for_area("boundary.geojson")
+
+# Process to basic GeoDataFrame
+gdf_basic = downloader.process_to_geodataframe(features)
+
+# Process for UHI analysis
+gdf_uhi = downloader.process_for_uhi_analysis(features)
+```
+
+## UHI-Specific Processing
+
+When `process_for_uhi=True` is used, the downloader adds specialized columns for Urban Heat Island analysis:
+
+### Land Use Classifications
+
+```python
+# UHI-optimized land use types
+LANDUSE_CATEGORIES = {
+    "urban_continuous": "High-density urban areas",
+    "urban_discontinuous": "Low-density urban areas", 
+    "industrial_commercial": "Industrial/commercial zones",
+    "green_urban_areas": "Parks and green spaces",
+    "agricultural": "Agricultural areas",
+    "forest": "Forest areas",
+    "water_bodies": "Water surfaces",
+    # ... and more
+}
+```
+
+### Impervious Surface Coefficients
+
+```python
+# Coefficient ranges from 0.0 (fully permeable) to 1.0 (fully impervious)
+IMPERVIOUS_COEFFICIENTS = {
+    "urban_continuous": 0.85,
+    "urban_discontinuous": 0.65,
+    "industrial_commercial": 0.90,
+    "green_urban_areas": 0.15,
+    "forest": 0.01,
+    "water_bodies": 0.00,
+    # ... and more
+}
+```
+
+### Example UHI Output
+
+```json
+{
+  "type": "Feature", 
+  "geometry": {...},
+  "properties": {
+    "corine_code": 111,
+    "landuse_type": "urban_continuous",
+    "impervious_area": 0.85,
+    "Shape_Area": 5000.0
+  }
+}
+```
+
+## Data Analysis Examples
+
+### Basic Land Use Analysis
+
+```python
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+# Load processed data
+gdf = gpd.read_file("berlin_corine_2018_uhi.geojson")
+
+# Land use distribution
+landuse_counts = gdf['landuse_type'].value_counts()
+print("Land use distribution:")
+print(landuse_counts)
+
+# Average impervious area by land use
+impervious_by_landuse = gdf.groupby('landuse_type')['impervious_area'].mean()
+print("\nAverage impervious area by land use:")
+print(impervious_by_landuse.sort_values(ascending=False))
+```
+
+### Urban Heat Island Potential
+
+```python
+# Calculate UHI potential based on impervious surfaces
+gdf['uhi_potential'] = pd.cut(
+    gdf['impervious_area'],
+    bins=[0, 0.2, 0.5, 0.8, 1.0],
+    labels=['Low', 'Medium', 'High', 'Very High']
+)
+
+# Plot UHI potential
+fig, ax = plt.subplots(figsize=(12, 8))
+gdf.plot(column='uhi_potential', cmap='Reds', ax=ax, legend=True)
+ax.set_title('Urban Heat Island Potential')
+plt.show()
+```
+
+## Utility Functions
+
+### Available Years
+
+```python
+# Check available Corine years
+available_years = CorineDataDownloader.get_available_years()
+print(f"Available years: {available_years}")
+
+# Check if specific year is available
+if CorineDataDownloader.is_year_available(2018):
+    print("2018 data is available")
+```
+
+### Year Selection Logic
+
+```python
+# The system automatically selects the best year:
+# 1. Newest year within the specified range
+# 2. If no year in range, closest to range midpoint
+
+downloader = CorineDataDownloader((2016, 2020))
+print(f"Selected year: {downloader.selected_year}")  # Would select 2018
+
+downloader = CorineDataDownloader((2014, 2016)) 
+print(f"Selected year: {downloader.selected_year}")  # Would select 2012 (closest)
+```
 
 ## Error Handling
 
 ```python
 try:
-    downloader = CorineDataDownloader(
-        start_date="2020-01-01",
-        end_date="2020-12-31"
+    downloader = CorineDataDownloader(2018)
+    path = downloader.download_and_save(
+        "study_area.geojson",
+        process_for_uhi=True
     )
-    output_path = downloader.download_and_save(geojson_path)
-    print(f"Download successful: {output_path}")
-except Exception as e:
-    print(f"Download error: {e}")
-```
-
-## Logging
-
-The downloader provides comprehensive logging:
-
-```python
-import logging
-
-# Configure logger
-logging.basicConfig(level=logging.INFO)
-
-# Use downloader
-downloader = CorineDataDownloader(
-    start_date="2020-01-01",
-    end_date="2020-12-31"
-)
-# Logs show: year selection, download progress, etc.
-```
-
-## Performance Optimization
-
-- **Pagination**: Automatic handling of large datasets
-- **Clipping**: Exact boundary clipping to target area
-- **Caching**: Avoidance of duplicate downloads
-- **CRS Transformation**: Efficient coordinate system handling
-
-## Examples
-
-### Complete Example
-
-```python
-from uhi_analyzer.data.corine_downloader import CorineDataDownloader
-from pathlib import Path
-import logging
-
-# Configure logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize downloader
-downloader = CorineDataDownloader(
-    start_date="2020-01-01",
-    end_date="2020-12-31",
-    logger=logger
-)
-
-# Define paths
-input_path = Path("data/raw/boundaries/berlin_admin_boundaries.geojson")
-output_path = Path("data/raw/landcover/berlin_corine_2018.geojson")
-
-# Download data
-try:
-    result_path = downloader.download_and_save(
-        geojson_path=input_path,
-        output_path=output_path
-    )
-    print(f"Corine data successfully downloaded: {result_path}")
-except Exception as e:
-    print(f"Download error: {e}")
-```
-
-### Multiple Periods Comparison
-
-```python
-periods = [
-    ("2000-01-01", "2000-12-31"),
-    ("2006-01-01", "2006-12-31"),
-    ("2012-01-01", "2012-12-31"),
-    ("2018-01-01", "2018-12-31")
-]
-
-for start_date, end_date in periods:
-    downloader = CorineDataDownloader(
-        start_date=start_date,
-        end_date=end_date
-    )
-    output_path = f"data/raw/landcover/berlin_corine_{downloader.selected_year}.geojson"
+    print(f"Success: {path}")
     
-    result_path = downloader.download_and_save(
-        geojson_path="data/raw/boundaries/berlin_admin_boundaries.geojson",
-        output_path=output_path
-    )
-    print(f"Period {start_date}-{end_date} (Corine {downloader.selected_year}): {result_path}")
+except ValueError as e:
+    print(f"Configuration error: {e}")
+except Exception as e:
+    print(f"Download error: {e}")
 ```
 
-## Testing
+## Performance Tips
+
+### For Large Areas
+
+```python
+# Use larger record counts
+downloader = CorineDataDownloader(2018, record_count=2000)
+
+# Skip clipping for very large areas
+path = downloader.download_and_save(
+    "large_region.geojson",
+    clip_to_boundary=False,
+    output_format='parquet'  # Efficient format
+)
+```
+
+### For Multiple Downloads
+
+```python
+# Reuse downloader instance
+downloader = CorineDataDownloader(2018)
+
+boundaries = ["area1.geojson", "area2.geojson", "area3.geojson"]
+for boundary in boundaries:
+    path = downloader.download_and_save(boundary)
+    print(f"Downloaded: {path}")
+```
+
+## Command Line Usage
 
 ```bash
-# Run integration tests
-uv run pytest tests/integration/test_corine_years.py
-
-# Run specific test
-uv run python tests/integration/test_corine_years.py
+# Test the functionality
+uv run scripts/data_processing/test_optimized_corine.py
 ```
 
-## UHI Analysis Features
+## Configuration Details
 
-The downloader is specifically optimized for Urban Heat Island analysis:
+### API Parameters (in settings.py)
 
-### Impervious Surface Coefficients
-- **0.0-0.1**: Natural areas (forest, water, wetlands)
-- **0.1-0.3**: Agricultural areas
-- **0.3-0.7**: Discontinuous urban fabric
-- **0.7-1.0**: Continuous urban fabric, industrial areas
+```python
+# Core Corine configuration
+CORINE_YEARS = [1990, 2000, 2006, 2012, 2018]
+CORINE_BASE_URLS = {
+    1990: "https://image.discomap.eea.europa.eu/arcgis/rest/services/Corine/CLC1990_WM/MapServer/0",
+    # ... more years
+}
 
-### Land Use Classification
-- Simplified categories for UHI modeling
-- Consistent classification across different Corine years
-- Integration with impervious surface coefficients
+# Default API settings
+DEFAULT_RECORD_COUNT = 1000
+DEFAULT_TIMEOUT = 30
+DEFAULT_OUTPUT_FORMAT = "geojson"
+```
 
----
+### Class-Level Configuration
 
-**Author:** Urban Heat Island Analyzer Team 
+```python
+# Output format mapping (in CorineDataDownloader)
+OUTPUT_FORMATS = {
+    'geojson': {'driver': 'GeoJSON', 'extension': '.geojson'},
+    'gpkg': {'driver': 'GPKG', 'extension': '.gpkg'},
+    'shp': {'driver': 'ESRI Shapefile', 'extension': '.shp'},
+    'parquet': {'driver': 'Parquet', 'extension': '.parquet'}
+}
+```
+
+## Migration from Legacy API
+
+### Old Usage
+
+```python
+# Legacy API (still works)
+downloader = CorineDataDownloader("2018-01-01", "2018-12-31")
+path = downloader.download_and_save("boundary.geojson")
+```
+
+### New Recommended Usage
+
+```python
+# New API (recommended)
+downloader = CorineDataDownloader(2018)
+path = downloader.download_and_save(
+    "boundary.geojson",
+    process_for_uhi=True,  # Optional UHI processing
+    output_format='gpkg'   # Flexible output formats
+)
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **No data returned**: Check if boundary intersects with Corine coverage area
+2. **Timeout errors**: Increase timeout parameter for large areas
+3. **Unknown Corine codes**: Check log warnings for unmapped land use codes
+4. **Format errors**: Ensure output format is supported
+
+### Debug Mode
+
+```python
+import logging
+
+# Enable debug logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+downloader = CorineDataDownloader(2018, logger=logger)
+```
+
+## Examples Repository
+
+Complete examples are available in:
+- `scripts/data_processing/test_optimized_corine.py` - Comprehensive testing
+- `scripts/analysis/analyze_heat_islands.py` - UHI analysis workflow 

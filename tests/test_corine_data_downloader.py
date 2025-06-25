@@ -12,7 +12,7 @@ from datetime import datetime
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
-from uhi_analyzer.config import CORINE_YEARS, get_best_corine_year_for_date_range
+from uhi_analyzer.config import CORINE_YEARS
 
 class TestCorineDataDownloader:
     def test_date_range_selection(self):
@@ -28,8 +28,9 @@ class TestCorineDataDownloader:
             (2022, 2024),    # After all available years
         ]
         for start_year, end_year in test_ranges:
-            selected_year = get_best_corine_year_for_date_range(start_year, end_year)
-            assert selected_year in CORINE_YEARS
+            # Test with the new API
+            downloader = CorineDataDownloader((start_year, end_year))
+            assert downloader.selected_year in CORINE_YEARS
 
     @pytest.mark.parametrize("start_date,end_date", [
         (2020, 2022),
@@ -41,7 +42,7 @@ class TestCorineDataDownloader:
         (2025, 2027),
     ])
     def test_downloader_initialization(self, start_date, end_date):
-        downloader = CorineDataDownloader(start_date=start_date, end_date=end_date)
+        downloader = CorineDataDownloader((start_date, end_date))
         assert downloader.start_year <= downloader.end_year
         assert downloader.selected_year in CORINE_YEARS
 
@@ -53,7 +54,7 @@ class TestCorineDataDownloader:
         datetime(2022, 6, 15),
     ])
     def test_date_format_parsing(self, date_input):
-        downloader = CorineDataDownloader(start_date=date_input, end_date=2023)
+        downloader = CorineDataDownloader((date_input, 2023))
         assert isinstance(downloader.start_year, int)
 
     @pytest.mark.parametrize("start_date,end_date", [
@@ -65,7 +66,7 @@ class TestCorineDataDownloader:
     ])
     def test_error_handling(self, start_date, end_date):
         with pytest.raises(Exception):
-            CorineDataDownloader(start_date=start_date, end_date=end_date)
+            CorineDataDownloader((start_date, end_date))
 
     def test_actual_download(self):
         test_geojson = Path("data/raw/boundaries/berlin_admin_boundaries.geojson")
@@ -76,8 +77,8 @@ class TestCorineDataDownloader:
             (2018, 2023),
         ]
         for start_year, end_year in test_ranges:
-            downloader = CorineDataDownloader(start_date=start_year, end_date=end_year)
-            bbox = downloader.get_bbox_from_geojson(test_geojson)
+            downloader = CorineDataDownloader((start_year, end_year))
+            bbox = downloader.get_bbox_from_geometry(test_geojson)
             assert isinstance(bbox, (list, tuple))
             url = downloader.build_query_url(bbox, offset=0)
             assert url.startswith("http")
