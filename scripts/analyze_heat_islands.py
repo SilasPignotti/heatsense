@@ -25,13 +25,14 @@ import tempfile
 import shutil
 
 # Add src to path for imports
-sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from uhi_analyzer import UrbanHeatIslandAnalyzer
-from uhi_analyzer.config.settings import UHI_LOG_DIR
+from uhi_analyzer.config.settings import UHI_LOG_DIR, UHI_CACHE_DIR
 from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
 from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
+from uhi_analyzer.utils.analyzer_factory import create_analyzer
 
 
 def setup_logging(output_dir: Path) -> logging.Logger:
@@ -364,6 +365,35 @@ def run_uhi_analysis(boundary_file: Path, landcover_file: Path, weather_file: Op
             if 'overall' in correlations:
                 overall = correlations['overall']
                 logger.info(f"   Overall temp-imperviousness correlation: {overall['correlation']:.3f}")
+            
+            # Show analysis type (grouped vs detailed)
+            analysis_type = results['land_use_correlation'].get('analysis_type', 'detailed')
+            logger.info(f"   Analysis type: {analysis_type} categories")
+        
+        # Display mitigation recommendations
+        if 'mitigation_recommendations' in results and results['mitigation_recommendations']:
+            recommendations = results['mitigation_recommendations']
+            logger.info(f"\n💡 Mitigation Recommendations ({len(recommendations)} strategies):")
+            logger.info("-" * 50)
+            
+            for i, rec in enumerate(recommendations, 1):
+                priority = rec.get('priority', 'medium').upper()
+                strategy = rec.get('strategy', 'unknown')
+                description = rec.get('description', 'No description available')
+                
+                priority_emoji = {
+                    'HIGH': '🔥',
+                    'MEDIUM': '⚡', 
+                    'LOW': '💡'
+                }.get(priority, '📋')
+                
+                logger.info(f"{priority_emoji} {i}. [{priority}] {description}")
+                
+                # Add strategy type for context
+                if strategy != 'unknown':
+                    logger.info(f"   Strategy type: {strategy}")
+        else:
+            logger.info("\n💡 No specific mitigation recommendations generated")
         
         # Generate visualization
         logger.info("🎨 Creating visualization...")
@@ -401,14 +431,94 @@ def run_uhi_analysis(boundary_file: Path, landcover_file: Path, weather_file: Op
                 f.write("\n")
             
             if 'hot_spots' in results:
-                f.write(f"Hotspots identified: {len(results['hot_spots'])}\n\n")
+                hotspots = results['hot_spots']
+                f.write(f"Hotspots identified: {len(hotspots)}\n")
+                if len(hotspots) > 0 and 'temperature' in hotspots.columns:
+                    hotspot_temps = hotspots['temperature'].dropna()
+                    if len(hotspot_temps) > 0:
+                        f.write(f"- Hotspot temperature range: {hotspot_temps.min():.1f}°C - {hotspot_temps.max():.1f}°C\n")
+                f.write("\n")
             
-            if 'mitigation_recommendations' in results:
-                f.write("Recommendations:\n")
-                for i, rec in enumerate(results['mitigation_recommendations'], 1):
-                    f.write(f"{i}. {rec.get('description', 'N/A')}\n")
+            # Land use correlation details
+            if 'land_use_correlation' in results:
+                land_use_data = results['land_use_correlation']
+                analysis_type = land_use_data.get('analysis_type', 'detailed')
+                f.write(f"Land Use Analysis ({analysis_type} categories):\n")
+                
+                if 'correlations' in land_use_data:
+                    correlations = land_use_data['correlations']
+                    if 'overall' in correlations:
+                        overall = correlations['overall']
+                        f.write(f"- Overall temperature-imperviousness correlation: {overall['correlation']:.3f}\n")
+                        f.write(f"- Significance (p-value): {overall['p_value']:.3f}\n")
+                        f.write(f"- Sample size: {overall['n_samples']} cells\n")
+                
+                if 'category_descriptions' in land_use_data:
+                    f.write("\nLand use categories analyzed:\n")
+                    for category, description in land_use_data['category_descriptions'].items():
+                        f.write(f"- {category}: {description}\n")
+                f.write("\n")
+            
+            # Detailed mitigation recommendations
+            if 'mitigation_recommendations' in results and results['mitigation_recommendations']:
+                recommendations = results['mitigation_recommendations']
+                f.write(f"Mitigation Recommendations ({len(recommendations)} strategies):\n")
+                f.write("=" * 40 + "\n")
+                
+                # Group by priority
+                priority_groups = {'high': [], 'medium': [], 'low': []}
+                for rec in recommendations:
+                    priority = rec.get('priority', 'medium').lower()
+                    if priority in priority_groups:
+                        priority_groups[priority].append(rec)
+                    else:
+                        priority_groups['medium'].append(rec)
+                
+                for priority in ['high', 'medium', 'low']:
+                    if priority_groups[priority]:
+                        f.write(f"\n{priority.upper()} PRIORITY:\n")
+                        for i, rec in enumerate(priority_groups[priority], 1):
+                            strategy = rec.get('strategy', 'general')
+                            description = rec.get('description', 'No description available')
+                            f.write(f"{i}. {description}\n")
+                            f.write(f"   Strategy type: {strategy}\n")
+                            if 'locations' in rec:
+                                f.write(f"   Target areas: Specific hotspot locations identified\n")
+                            f.write("\n")
+            else:
+                f.write("Mitigation Recommendations: None generated\n")
+                f.write("Note: Recommendations are based on hotspot identification and land use correlations.\n")
         
         logger.info(f"📄 Summary saved to: {summary_path}")
+        
+        # Save recommendations as separate JSON file for programmatic use
+        if 'mitigation_recommendations' in results and results['mitigation_recommendations']:
+            import json
+            recommendations_path = output_dir / f"mitigation_recommendations_{start_date}_to_{end_date}.json"
+            
+            # Prepare enhanced recommendations data
+            enhanced_recommendations = {
+                'analysis_metadata': {
+                    'analysis_date': date.today().isoformat(),
+                    'study_period': f"{start_date} to {end_date}",
+                    'location': boundary_file.stem,
+                    'total_hotspots': len(results.get('hot_spots', [])),
+                    'analysis_type': results.get('land_use_correlation', {}).get('analysis_type', 'detailed')
+                },
+                'recommendations': results['mitigation_recommendations'],
+                'implementation_notes': [
+                    "Recommendations are based on satellite temperature analysis and land use correlations",
+                    "High priority recommendations target identified heat island hotspots",
+                    "Implementation should consider local zoning regulations and feasibility",
+                    "Regular monitoring is recommended to assess effectiveness"
+                ]
+            }
+            
+            with open(recommendations_path, 'w') as f:
+                json.dump(enhanced_recommendations, f, indent=2, default=str)
+            
+            logger.info(f"💾 Recommendations saved to: {recommendations_path}")
+        
         return True
         
     except Exception as e:

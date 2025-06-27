@@ -35,7 +35,10 @@ from ..config.settings import (
     UHI_LOG_LEVEL,
     CRS_CONFIG,
     CORINE_LANDUSE_MAPPING,
-    CORINE_IMPERVIOUS_COEFFICIENTS
+    CORINE_IMPERVIOUS_COEFFICIENTS,
+    CORINE_DETAILED_TO_GROUPED,
+    CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS,
+    CORINE_GROUPED_DESCRIPTIONS
 )
 
 class UrbanHeatIslandAnalyzer:
@@ -648,10 +651,19 @@ class UrbanHeatIslandAnalyzer:
     def _analyze_landuse_correlation(
         self,
         temp_data: gpd.GeoDataFrame,
-        landuse: gpd.GeoDataFrame
+        landuse: gpd.GeoDataFrame,
+        use_grouped_categories: bool = True
     ) -> Dict:
-        """Analyze correlation between land use and temperature."""
-        self.logger.info("Analyzing land use and temperature correlations")
+        """
+        Analyze correlation between land use and temperature.
+        
+        Args:
+            temp_data: GeoDataFrame with temperature grid
+            landuse: GeoDataFrame with land use data
+            use_grouped_categories: If True, use grouped categories for cleaner analysis
+        """
+        self.logger.info(f"Analyzing land use and temperature correlations "
+                        f"({'grouped' if use_grouped_categories else 'detailed'} categories)")
         
         # Ensure both GeoDataFrames have the same CRS
         if temp_data.crs != landuse.crs:
@@ -664,19 +676,28 @@ class UrbanHeatIslandAnalyzer:
         # Map CORINE land cover codes to land use types if needed
         if 'CODE_18' in landuse_processed.columns and 'landuse_type' not in landuse_processed.columns:
             landuse_processed['landuse_type'] = landuse_processed['CODE_18'].map(CORINE_LANDUSE_MAPPING)
-            landuse_processed['impervious_area'] = landuse_processed['landuse_type'].map(CORINE_IMPERVIOUS_COEFFICIENTS)
-            self.logger.info("Mapped CORINE codes to land use types")
+            self.logger.info("Mapped CORINE codes to detailed land use types")
         elif 'landuse_type' not in landuse_processed.columns:
             # If no recognizable land use column, create a default one
             landuse_processed['landuse_type'] = 'unknown'
-            landuse_processed['impervious_area'] = 0.5  # Default medium imperviousness
             self.logger.warning("No land use type column found, using default values")
         
-        # Add impervious area if missing
-        if 'impervious_area' not in landuse_processed.columns:
-            landuse_processed['impervious_area'] = landuse_processed['landuse_type'].map(
-                CORINE_IMPERVIOUS_COEFFICIENTS
-            ).fillna(0.5)  # Default to medium imperviousness if unknown
+        # Group categories if requested
+        if use_grouped_categories:
+            landuse_processed['landuse_group'] = landuse_processed['landuse_type'].map(CORINE_DETAILED_TO_GROUPED)
+            landuse_processed['landuse_group'] = landuse_processed['landuse_group'].fillna('unknown')
+            landuse_processed['impervious_area'] = landuse_processed['landuse_group'].map(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)
+            analysis_column = 'landuse_group'
+            coefficient_mapping = CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS
+            self.logger.info(f"Using {len(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)} grouped land use categories")
+        else:
+            landuse_processed['impervious_area'] = landuse_processed['landuse_type'].map(CORINE_IMPERVIOUS_COEFFICIENTS)
+            analysis_column = 'landuse_type'
+            coefficient_mapping = CORINE_IMPERVIOUS_COEFFICIENTS
+            self.logger.info(f"Using {len(CORINE_IMPERVIOUS_COEFFICIENTS)} detailed land use categories")
+        
+        # Fill missing impervious area values
+        landuse_processed['impervious_area'] = landuse_processed['impervious_area'].fillna(0.5)
         
         # Spatial join between temperature grid and land use
         try:
@@ -686,12 +707,12 @@ class UrbanHeatIslandAnalyzer:
             self.logger.error(f"Spatial join failed: {str(e)}")
             return {'statistics': {}, 'correlations': {}}
 
-        # Fill missing values
-        joined['landuse_type'] = joined['landuse_type'].fillna('unknown')
+        # Fill missing values in the analysis column
+        joined[analysis_column] = joined[analysis_column].fillna('unknown')
         joined['impervious_area'] = joined['impervious_area'].fillna(0.5)
 
-        # Calculate statistics by land use type
-        stats = joined.groupby('landuse_type').agg({
+        # Calculate statistics by land use category
+        stats = joined.groupby(analysis_column).agg({
             'temperature': ['mean', 'std', 'count', 'min', 'max'],
             'impervious_area': ['mean']
         }).round(2)
@@ -702,13 +723,13 @@ class UrbanHeatIslandAnalyzer:
 
         # Perform statistical tests
         correlations = {}
-        unique_types = joined['landuse_type'].unique()
+        unique_types = joined[analysis_column].unique()
         
         for ltype in unique_types:
             if pd.isna(ltype):
                 continue
                 
-            mask = joined['landuse_type'] == ltype
+            mask = joined[analysis_column] == ltype
             type_data = joined[mask]
             
             if len(type_data) > 1:  # Need at least 2 points for correlation
@@ -745,14 +766,26 @@ class UrbanHeatIslandAnalyzer:
                 self.logger.warning(f"Overall correlation calculation failed: {str(e)}")
 
         self.logger.info(f"Land use correlation analysis completed for {len(correlations)} categories")
+        
+        # Add category descriptions if using grouped categories
+        category_descriptions = {}
+        if use_grouped_categories:
+            for category in unique_types:
+                if category in CORINE_GROUPED_DESCRIPTIONS:
+                    category_descriptions[category] = CORINE_GROUPED_DESCRIPTIONS[category]
+                else:
+                    category_descriptions[category] = f"Unknown category: {category}"
+        
         return {
             'statistics': stats.to_dict(),
             'correlations': correlations,
+            'category_descriptions': category_descriptions,
+            'analysis_type': 'grouped' if use_grouped_categories else 'detailed',
             'summary': {
                 'total_cells': len(joined),
-                'land_use_types': len(unique_types),
+                'land_use_categories': len(unique_types),
                 'cells_with_temperature': (~pd.isna(joined['temperature'])).sum(),
-                'cells_with_landuse': (~pd.isna(joined['landuse_type'])).sum()
+                'cells_with_landuse': (~pd.isna(joined[analysis_column])).sum()
             }
         }
 
@@ -1110,8 +1143,25 @@ class UrbanHeatIslandAnalyzer:
                             x_pos = range(len(stats_df))
                             axes[0, 1].bar(x_pos, stats_df['temperature_mean'])
                             axes[0, 1].set_xticks(x_pos)
-                            axes[0, 1].set_xticklabels(stats_df['landuse_type'], rotation=45, ha='right')
-                            axes[0, 1].set_title('Mean Temperature by Land Use')
+                            
+                            # Use the first column as category labels (could be landuse_type or landuse_group)
+                            category_col = stats_df.columns[0]
+                            category_labels = stats_df[category_col]
+                            
+                            # Shorten labels if they're too long
+                            shortened_labels = []
+                            for label in category_labels:
+                                if len(str(label)) > 15:
+                                    shortened_labels.append(str(label)[:15] + '...')
+                                else:
+                                    shortened_labels.append(str(label))
+                            
+                            axes[0, 1].set_xticklabels(shortened_labels, rotation=45, ha='right')
+                            
+                            # Determine title based on analysis type
+                            analysis_type = results['land_use_correlation'].get('analysis_type', 'detailed')
+                            title = f'Mean Temperature by Land Use ({analysis_type.title()})'
+                            axes[0, 1].set_title(title)
                             axes[0, 1].set_ylabel('Temperature (°C)')
                             plots_created += 1
                         else:

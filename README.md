@@ -1,317 +1,250 @@
-# Urban Heat Island Analyzer
+# Urban Heat Island Analyzer 🌡️🏙️
 
-Ein Python-basiertes System zur Analyse von Urban Heat Islands (UHI) basierend auf Satellitendaten, Wetterdaten, Landnutzung und geografischen Grenzen.
+Ein modernes Python-Tool zur Analyse städtischer Wärmeinseln mit Unterstützung für Landsat-Satellitendaten, Landnutzungsdaten und Wetterstationen.
 
-## 🏗️ Projektstruktur
+## Features
 
-```
-urban_heat_island_analyzer/
-├── data/                          # Datenverzeichnis
-│   ├── processed/                 # Verarbeitete Daten
-│   │   ├── weather/              # Wetterdaten
-│   │   └── uhi_analysis/         # UHI-Analyseergebnisse
-│   └── raw/                      # Rohdaten
-│       ├── boundaries/           # Verwaltungsgrenzen
-│       └── landcover/            # Landnutzungsdaten
-├── docs/                         # Dokumentation
-│   ├── corine_downloader.md       # CorineDataDownloader-Dokumentation
-│   ├── dwd_downloader.md          # DWDDataDownloader-Dokumentation
-│   └── wfs_downloader.md          # WFSDataDownloader-Dokumentation
-├── logs/                         # Log-Dateien
-├── scripts/                      # Ausführbare Scripts
-│   ├── data_processing/          # Datenverarbeitung
-│   │   ├── download_berlin_boundaries.py
-│   │   ├── download_berlin_weather_data.py
-│   │   ├── download_corine_landcover.py
-│   │   └── analyze_heat_islands.py
-│   └── setup_earth_engine.py     # Google Earth Engine Setup
-├── src/                          # Quellcode
-│   └── uhi_analyzer/             # Hauptpaket
-│       ├── config/               # Konfiguration
-│       ├── data/                 # Datenmodule
-│       │   ├── corine_downloader.py
-│       │   ├── dwd_downloader.py
-│       │   ├── wfs_downloader.py
-│       │   └── urban_heat_island_analyzer.py
-│       ├── utils/                # Hilfsfunktionen
-│       ├── visualization/        # Visualisierung
-│       └── webapp/               # Web-Anwendung
-├── tests/                        # Tests
-│   ├── integration/              # Integrationstests
-│   └── unit/                     # Unit-Tests
-├── pyproject.toml                # Projekt-Konfiguration
-├── uv.lock                       # Dependency-Lock
-└── README.md                     # Diese Datei
-```
+- 🛰️ **Satellitendatenanalyse** mit Google Earth Engine (Landsat 8)
+- 🗺️ **Automatischer Datendownload** für Berlin-Bezirke via WFS
+- 🌱 **CORINE Landnutzungsdaten-Integration**  
+- 🌡️ **DWD Wetterdaten-Integration** mit räumlicher Interpolation
+- 📊 **Statistische Hotspot-Analyse** mit Moran's I
+- 🚀 **Performance-Modi** für verschiedene Anwendungsfälle
+- 💾 **Intelligentes Caching** für schnellere Wiederholungsanalysen
+- 🌐 **Web-API Backend** für Anwendungsintegration
+- 📈 **Detaillierte Visualisierungen** und Reports
 
-## 🚀 Schnellstart
+## Installation
 
-### Installation
+### Voraussetzungen
+- Python 3.11+
+- Google Earth Engine Account
+- UV Package Manager
+
+### Setup
 
 ```bash
 # Repository klonen
 git clone <repository-url>
 cd urban_heat_island_analyzer
 
-# Dependencies installieren (mit uv)
+# Dependencies installieren
 uv sync
+
+# Google Earth Engine authentifizieren
+uv run earthengine authenticate
+
+# Environment-Variablen setzen
+export UHI_EARTH_ENGINE_PROJECT="your-gee-project-id"
 ```
 
-### Google Earth Engine Setup (für Satellitendaten)
+## Schnellstart
 
-Für die Analyse mit echten Satellitendaten ist eine Google Earth Engine Konfiguration erforderlich:
-
-```bash
-# 1. Environment-Konfiguration erstellen
-cp .env.example .env
-# Bearbeiten Sie .env und setzen Sie Ihre Google Earth Engine Projekt-ID
-
-# 2. Earth Engine Authentifizierung
-earthengine authenticate
-```
-
-**Hinweis:** Sie benötigen ein Google Cloud Project mit Earth Engine API:
-1. Besuchen Sie https://console.cloud.google.com/
-2. Erstellen Sie ein neues Projekt oder wählen Sie ein bestehendes
-3. Aktivieren Sie die Earth Engine API
-4. Registrieren Sie sich für Google Earth Engine (https://earthengine.google.com/)
-5. Tragen Sie Ihre Projekt-ID in die .env Datei ein
-
-### Konfiguration
-
-1. **Umgebungsvariablen setzen** (optional):
-   ```bash
-   export DWD_BUFFER_DISTANCE=5000
-   export DWD_INTERPOLATION_RESOLUTION=1000
-   ```
-
-2. **Logging konfigurieren**:
-   ```bash
-   mkdir -p logs
-   ```
-
-### Daten herunterladen
-
-#### 1. Berliner Verwaltungsgrenzen
-```bash
-uv run scripts/data_processing/download_berlin_boundaries.py
-```
-
-#### 2. Wetterdaten für Berlin
-```bash
-uv run scripts/data_processing/download_berlin_weather_data.py --date 2024-06-15
-```
-
-#### 3. Corine Land Cover Daten
-```bash
-uv run scripts/data_processing/download_corine_landcover.py --year 2018
-```
-
-#### 4. Urban Heat Island Analyse mit Satellitendaten
-```bash
-uv run scripts/data_processing/analyze_heat_islands.py \
-  --start-date 2023-07-01 \
-  --end-date 2023-07-31 \
-  --cloud-threshold 15
-```
-
-## 🌍 Satellitenbasierte UHI-Analyse
-
-Das System unterstützt jetzt echte Satellitendaten-Analyse mit Google Earth Engine:
-
-### Features
-- **Landsat 8 Thermal Data**: Verwendet Landsat 8 Collection 2 Tier 1 Level 2 Daten
-- **Cloud Filtering**: Automatische Filterung von wolkenbedeckten Szenen
-- **Temperature Extraction**: Extraktion von Oberflächentemperaturen
-- **Hotspot Detection**: Identifikation von Wärmeinseln
-- **Land Use Correlation**: Korrelation zwischen Landnutzung und Temperaturen
-- **Temporal Analysis**: Zeitliche Trendanalyse
-- **Ground Validation**: Validierung mit Wetterstationsdaten
-
-### Beispiel: Vollständige Satellitenanalyse
-
+### Einfache Analyse
 ```python
-from uhi_analyzer import UrbanHeatIslandAnalyzer
-from datetime import date
-
-# Analyzer mit Satellitendaten initialisieren
-analyzer = UrbanHeatIslandAnalyzer(cloud_cover_threshold=20)
-
-# Vollständige UHI-Analyse mit Satellitendaten
-results = analyzer.analyze_heat_islands(
-    city_boundary="data/raw/boundaries/berlin_admin_boundaries.geojson",
-    date_range=(date(2023, 7, 1), date(2023, 7, 31)),
-    landuse_data="data/raw/landcover/berlin_corine_landcover_2018.geojson",
-    weather_stations="data/processed/weather/berlin_weather_stations.geojson"  # Optional
-)
-
-# Ergebnisse visualisieren
-analyzer.visualize_results(results, "uhi_satellite_analysis.png")
-
-# Detaillierte Ergebnisse anzeigen
-print(f"Temperaturen analysiert: {len(results['temperature_statistics'])}")
-print(f"Hotspots identifiziert: {len(results['hot_spots'])}")
-print(f"Landnutzungskorrelationen: {len(results['land_use_correlation'])}")
-
-# Mitigationsempfehlungen
-for rec in results['mitigation_recommendations']:
-    print(f"{rec['type']}: {rec['description']} (Priorität: {rec['priority']})")
-```
-
-### Konfigurationsoptionen
-
-```python
-# Erweiterte Konfiguration
-analyzer = UrbanHeatIslandAnalyzer(
-    cloud_cover_threshold=15,  # Max. 15% Wolkenbedeckung
-    log_file="logs/satellite_analysis.log"
-)
-
-# Analyse mit angepassten Parametern
-results = analyzer.analyze_heat_islands(
-    city_boundary="berlin.geojson",
-    date_range=(date(2023, 6, 1), date(2023, 8, 31)),  # Sommer 2023
-    landuse_data="corine_2018.geojson",
-    weather_stations="weather_stations.geojson"  # Für Validierung
-)
-```
-
-## 📊 Datenmodule
-
-### UrbanHeatIslandAnalyzer - Satellitenbasierte UHI-Analyse
-
-```python
-from uhi_analyzer import UrbanHeatIslandAnalyzer
+from uhi_analyzer import FastUrbanHeatIslandAnalyzer
 from datetime import date
 
 # Analyzer initialisieren
-analyzer = UrbanHeatIslandAnalyzer(cloud_cover_threshold=20)
+analyzer = FastUrbanHeatIslandAnalyzer(performance_mode="fast")
+analyzer.initialize_earth_engine()
 
-# UHI-Analyse durchführen
+# Analyse durchführen
 results = analyzer.analyze_heat_islands(
-    city_boundary="data/raw/boundaries/berlin_admin_boundaries.geojson",
+    city_boundary="data/boundaries/kreuzberg.geojson",
     date_range=(date(2023, 7, 1), date(2023, 7, 31)),
-    landuse_data="data/raw/landcover/berlin_corine_landcover_2018.geojson"
-)
-
-# Ergebnisse visualisieren
-analyzer.visualize_results(results, "uhi_analysis_results.png")
-
-# Empfehlungen anzeigen
-for rec in results['mitigation_recommendations']:
-    print(f"{rec['type']}: {rec['description']}")
-```
-
-### DWDDataDownloader mit verschiedenen Zeitpunkten
-
-```python
-from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
-from datetime import datetime
-
-# Service initialisieren
-service = DWDDataDownloader(buffer_distance=5000, interpolation_method="linear")
-
-# Daten für spezifischen Zeitpunkt abrufen
-timestamp = datetime(2024, 6, 15, 14, 0, 0)  # 15. Juni 2024, 14:00 Uhr
-weather_data = service.get_weather_data(
-    geometry="path/to/berlin.geojson",
-    timestamp=timestamp,
-    interpolate=True,
-    resolution=1000
+    landuse_data="data/landuse/corine_kreuzberg.geojson"
 )
 ```
 
-### CorineDataDownloader mit verschiedenen Jahren
+### Command Line Interface
+```bash
+# Vollständige Analyse für Berlin-Bezirk
+uv run python scripts/analyze_heat_islands.py \
+    --start-date 2023-07-01 \
+    --end-date 2023-07-31 \
+    --suburb "Kreuzberg"
 
-```python
-from uhi_analyzer.data.corine_downloader import CorineDataDownloader
-
-# Standard (2018)
-downloader = CorineDataDownloader()
-
-# Spezifisches Jahr
-downloader = CorineDataDownloader(target_year=2012)
-
-# Automatische Jahr-Auswahl
-downloader = CorineDataDownloader(target_year=2015)  # Wählt 2012
+# Web-Backend API
+uv run python src/uhi_analyzer/webapp/backend/uhi_backend_api.py \
+    --area "Mitte" \
+    --start-date 2023-06-01 \
+    --end-date 2023-08-31 \
+    --performance-mode fast
 ```
 
-### WFSDataDownloader für verschiedene Geodaten
+## Architektur
+
+### Performance-Modi
+- **preview**: Schnelle Vorschau (300m Grid, reduzierte Qualität)
+- **fast**: Ausgewogene Geschwindigkeit/Qualität (200m Grid) 
+- **standard**: Standard-Qualität (100m Grid)
+- **detailed**: Höchste Qualität (50m Grid, wissenschaftlich)
+
+### Cache-System
+Das System nutzt intelligentes Caching für optimale Performance:
+
+```
+src/uhi_analyzer/webapp/backend/cache/
+├── boundaries/       # Bezirksgrenzen
+├── earth_engine/     # Satellitendaten-Metadaten  
+├── grids/           # Räumliche Analyseraster
+├── landcover/       # Landnutzungsklassifikation
+└── temperatures/    # Berechnete Temperaturraster
+```
+
+### Datenquellen
+- **Satellitendaten**: Landsat 8 Collection 2 Tier 1 Level 2
+- **Grenzdaten**: Berlin WFS (FIS-Broker)
+- **Landnutzung**: CORINE Land Cover (Copernicus)
+- **Wetterdaten**: DWD Climate Data Center
+
+## Konfiguration
+
+Zentrale Konfiguration in `src/uhi_analyzer/config/settings.py`:
 
 ```python
-from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
-from uhi_analyzer.config.wfs_config import BERLIN_ADMIN_BOUNDARIES_CONFIG
+# Cache-Konfiguration  
+UHI_CACHE_DIR = Path(__file__).parent.parent / "webapp" / "backend" / "cache"
+UHI_CACHE_MAX_AGE_DAYS = 30
+UHI_CACHE_MAX_SIZE_GB = 5.0
 
-# Downloader initialisieren
-downloader = WFSDataDownloader(config=BERLIN_ADMIN_BOUNDARIES_CONFIG)
+# Performance-Modi
+UHI_PERFORMANCE_MODES = {
+    "preview": {"grid_cell_size": 300, "cloud_cover_threshold": 40},
+    "fast": {"grid_cell_size": 200, "cloud_cover_threshold": 30},
+    # ...
+}
+```
 
-# Daten herunterladen
-success = downloader.download_and_validate(
-    endpoint_name="berlin_admin_boundaries",
-    output_path="data/raw/boundaries/berlin.geojson"
+## API-Referenz
+
+### FastUrbanHeatIslandAnalyzer
+```python
+analyzer = FastUrbanHeatIslandAnalyzer(
+    performance_mode="fast",           # Performance-Modus
+    cache_dir=None,                   # Auto: verwendet UHI_CACHE_DIR
+    max_cache_age_days=30,            # Cache-Gültigkeit
+    cloud_cover_threshold=20          # Wolkenabdeckung (%)
 )
 ```
 
-## 🧪 Tests
+### Web-Backend
+```python
+from uhi_analyzer.webapp.backend import UHIAnalysisBackend
+
+backend = UHIAnalysisBackend(cache_enabled=True)
+result = backend.analyze(
+    area="Kreuzberg",
+    start_date="2023-07-01", 
+    end_date="2023-07-31",
+    performance_mode="fast"
+)
+```
+
+## Projektstruktur
+
+```
+urban_heat_island_analyzer/
+├── src/uhi_analyzer/
+│   ├── config/              # Konfiguration
+│   ├── data/               # Datenanalyse und -download
+│   ├── utils/              # Hilfsfunktionen und Cache
+│   └── webapp/backend/     # Web-API Backend
+│       └── cache/          # 🆕 Zentraler Cache-Speicher
+├── scripts/                # Ausführbare Scripte
+├── tests/                 # Unit-Tests
+├── docs/                  # Dokumentation
+└── data/                  # Ein-/Ausgabedaten
+```
+
+## Testing
 
 ```bash
-# Alle Tests ausführen
-uv run pytest
+# Unit-Tests ausführen
+uv run pytest tests/
 
-# Spezifische Tests
-uv run pytest tests/integration/test_corine_years.py
+# Einzelnen Test ausführen
+uv run pytest tests/test_urban_heat_island_analyzer.py -v
+
+# Mit Coverage
+uv run pytest --cov=uhi_analyzer tests/
 ```
 
-## 📝 Logging
+## Performance-Optimierung
 
-Das System verwendet strukturiertes Logging:
-
+### Cache-Management
 ```python
-import logging
+# Cache-Statistiken anzeigen
+analyzer = FastUrbanHeatIslandAnalyzer()
+stats = analyzer.get_cache_stats()
+print(f"Cache: {stats['total_files']} Dateien, {stats['total_size_mb']} MB")
 
-# Logger konfigurieren
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/application.log'),
-        logging.StreamHandler()
-    ]
-)
+# Cache-Typen löschen
+analyzer.clear_cache('temperatures')  # Nur Temperaturdaten
+analyzer.clear_cache()               # Komplett
 ```
 
-## 🔧 Konfiguration
+### Best Practices
+- Verwende **fast_cached** Modus für interaktive Anwendungen
+- **preview** Modus für schnelle Erkundung
+- **detailed** Modus nur für finale Analysen
+- Cache-Verzeichnis auf SSD für beste Performance
+- Regelmäßige Cache-Bereinigung bei Speicherplatzmangel
 
-### UHI-Analyzer-Einstellungen
-- `UHI_CLOUD_COVER_THRESHOLD`: Maximale Wolkenbedeckung in Prozent (Standard: 20)
-- `UHI_GRID_CELL_SIZE`: Rasterzellengröße in Metern (Standard: 100)
-- `UHI_HOTSPOT_THRESHOLD`: Schwellenwert für Hotspot-Identifikation (Standard: 0.9)
-- `UHI_LANDSAT_COLLECTION`: Landsat-Datensammlung (Standard: "LANDSAT/LC08/C02/T1_L2")
+## Troubleshooting
 
-### DWD-Einstellungen
-- `DWD_BUFFER_DISTANCE`: Buffer um Geometrie in Metern (Standard: 5000)
-- `DWD_INTERPOLATION_RESOLUTION`: Auflösung für Interpolation in Metern (Standard: 1000)
-- `DWD_INTERPOLATION_METHOD`: Interpolationsmethode (Standard: "linear")
+### Google Earth Engine Authentifizierung
+```bash
+# Neu authentifizieren
+uv run earthengine authenticate
 
-### Corine-Einstellungen
-- Unterstützte Jahre: 1990, 2000, 2006, 2012, 2018
-- Automatische Jahr-Auswahl basierend auf gewünschtem Jahr
+# Service Account verwenden
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+```
 
-## 📚 Dokumentation
+### Cache-Probleme
+```bash
+# Cache neu initialisieren
+rm -rf src/uhi_analyzer/webapp/backend/cache/
+# Analyzer neu starten -> erstellt Cache-Struktur automatisch
+```
 
-- **[UrbanHeatIslandAnalyzer](docs/urban_heat_island_analyzer.md)** - Satellitenbasierte UHI-Analyse
-- **[DWDDataDownloader](docs/dwd_downloader.md)** - DWD Wetterdaten Downloader
-- **[CorineDataDownloader](docs/corine_downloader.md)** - Corine Land Cover Daten Downloader
-- **[WFSDataDownloader](docs/wfs_downloader.md)** - Web Feature Service Downloader
+### Performance-Probleme
+- Reduziere `grid_cell_size` für größere Gebiete
+- Verwende `performance_mode="preview"` für Tests
+- Prüfe verfügbaren Arbeitsspeicher bei detaillierten Analysen
 
-## 🤝 Beitragen
+## Beitragen
 
-1. Fork erstellen
+1. Fork des Repositories
 2. Feature-Branch erstellen (`git checkout -b feature/amazing-feature`)
 3. Änderungen committen (`git commit -m 'Add amazing feature'`)
 4. Branch pushen (`git push origin feature/amazing-feature`)
 5. Pull Request erstellen
 
-## 📄 Lizenz
+## Lizenz
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert.
+MIT Lizenz - siehe `LICENSE` Datei für Details.
+
+## Changelog
+
+### v2.0.0 (Latest)
+- ✨ Zentralisierte Cache-Architektur in `webapp/backend/cache/`
+- 🚀 Verbesserte Performance durch optimierte Cache-Verwaltung
+- 🧹 Bereinigung redundanter Cache-Ordner
+- 📦 Einheitliche Konfiguration über `UHI_CACHE_DIR`
+- 🔧 Vereinfachte Cache-Parameter in allen Komponenten
+
+### v1.9.0
+- 🌐 Web-Backend API für Anwendungsintegration
+- 📊 Erweiterte Statistiken und Metadaten
+- 🎛️ Flexible Performance-Modi
+- 💾 Intelligentes Caching-System
+
+## Support
+
+Bei Fragen oder Problemen:
+- Issues im GitHub Repository erstellen
+- Dokumentation in `docs/` konsultieren  
+- Performance-Leitfäden für Optimierung nutzen

@@ -5,7 +5,7 @@ Analysis completed: 2025-06-26
 Period: 2023-07-01 to 2023-07-31
 Boundary data: kreuzberg_boundary.geojson
 Land cover data: landcover_2018.geojson
-Weather data: weather_2023-07-01_to_2023-07-31.geojson
+Weather data: None (satellite only)
 Cloud threshold: 20%
 
 Temperature Analysis:
@@ -15,6 +15,24 @@ Temperature Analysis:
 - Temperature range: 8.2°C - 44.4°C
 
 Hotspots identified: 298
+- Hotspot temperature range: 38.8°C - 44.4°C
 
-Recommendations:
+Land Use Analysis (grouped categories):
+- Overall temperature-imperviousness correlation: 0.085
+- Significance (p-value): 0.000
+- Sample size: 3819 cells
+
+Land use categories analyzed:
+- low_density_urban: Niedrigversiegelte urbane Bereiche (Vororte, Baustellen)
+- urban_green: Urbane Grünflächen (Parks, Sportanlagen)
+- high_density_urban: Hochversiegelte urbane Bereiche (Stadtzentren, Industrie, Verkehr)
+- water_and_natural: Wasserflächen und natürliche offene Bereiche
+
+Mitigation Recommendations (1 strategies):
+========================================
+
+HIGH PRIORITY:
 1. Increase green coverage in identified hot spots
+   Strategy type: hot_spot_mitigation
+   Target areas: Specific hotspot locations identified
+

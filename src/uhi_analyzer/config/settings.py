@@ -239,6 +239,108 @@ CORINE_IMPERVIOUS_COEFFICIENTS = {
 }
 
 # =============================================================================
+# Grouped Land Use Categories for UHI Analysis
+# =============================================================================
+
+# Gruppierung der CORINE-Kategorien in 6 Hauptkategorien für UHI-Analyse
+CORINE_GROUPED_CATEGORIES = {
+    # Hochversiegelte urbane Bereiche (sehr hoher UHI-Effekt)
+    "high_density_urban": [
+        "urban_continuous",
+        "industrial_commercial", 
+        "road_transport",
+        "port_areas",
+        "airports"
+    ],
+    
+    # Niedrigversiegelte urbane Bereiche (mittlerer UHI-Effekt)
+    "low_density_urban": [
+        "urban_discontinuous",
+        "mineral_extraction",
+        "dump_sites", 
+        "construction_sites"
+    ],
+    
+    # Urbane Grünflächen (kühlender Effekt)
+    "urban_green": [
+        "green_urban_areas",
+        "sport_leisure"
+    ],
+    
+    # Landwirtschaftliche Flächen (neutraler bis leicht kühlender Effekt)
+    "agricultural": [
+        "non_irrigated_arable",
+        "irrigated_arable",
+        "rice_fields",
+        "vineyards", 
+        "fruit_trees",
+        "olive_groves",
+        "pastures",
+        "agriculture_natural_mixed",
+        "complex_cultivation",
+        "agriculture_natural_areas",
+        "agro_forestry"
+    ],
+    
+    # Natürliche Vegetation (starker kühlender Effekt)
+    "natural_vegetation": [
+        "broad_leaved_forest",
+        "coniferous_forest",
+        "mixed_forest",
+        "natural_grasslands",
+        "moors_heathland",
+        "sclerophyllous_vegetation",
+        "transitional_woodland"
+    ],
+    
+    # Wasserflächen und natürliche offene Bereiche (starker kühlender Effekt)
+    "water_and_natural": [
+        "beaches_dunes",
+        "bare_rocks", 
+        "sparsely_vegetated",
+        "burnt_areas",
+        "glaciers_snow",
+        "inland_marshes",
+        "peat_bogs",
+        "salt_marshes",
+        "salines",
+        "intertidal_flats",
+        "water_courses",
+        "water_bodies",
+        "coastal_lagoons",
+        "estuaries",
+        "sea_ocean"
+    ]
+}
+
+# Mapping von detaillierten zu gruppierten Kategorien
+CORINE_DETAILED_TO_GROUPED = {}
+for group_name, detailed_categories in CORINE_GROUPED_CATEGORIES.items():
+    for detailed_cat in detailed_categories:
+        CORINE_DETAILED_TO_GROUPED[detailed_cat] = group_name
+
+# Versiegelungskoeffizienten für die gruppierten Kategorien 
+# (gewichteter Durchschnitt basierend auf typischen Verteilungen)
+CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS = {
+    "high_density_urban": 0.88,     # Sehr hoch versiegelt
+    "low_density_urban": 0.56,      # Mittlere Versiegelung  
+    "urban_green": 0.18,            # Niedrige Versiegelung
+    "agricultural": 0.04,           # Sehr niedrige Versiegelung
+    "natural_vegetation": 0.01,     # Praktisch unversiegelt
+    "water_and_natural": 0.02       # Praktisch unversiegelt
+}
+
+# Beschreibungen der gruppierten Kategorien für Reports
+CORINE_GROUPED_DESCRIPTIONS = {
+    "high_density_urban": "Hochversiegelte urbane Bereiche (Stadtzentren, Industrie, Verkehr)",
+    "low_density_urban": "Niedrigversiegelte urbane Bereiche (Vororte, Baustellen)",
+    "urban_green": "Urbane Grünflächen (Parks, Sportanlagen)",
+    "agricultural": "Landwirtschaftliche Flächen (Felder, Weiden, Plantagen)",
+    "natural_vegetation": "Natürliche Vegetation (Wälder, Grasland)",
+    "water_and_natural": "Wasserflächen und natürliche offene Bereiche"
+}
+
+# =============================================================================
 # DWD Weather Service Configuration
 # =============================================================================
 
@@ -259,6 +361,67 @@ DWD_INTERPOLATION_METHOD = "linear"  # Interpolation method ('linear', 'nearest'
 DWD_INTERPOLATE_BY_DEFAULT = True  # Perform interpolation by default
 
 
+
+# =============================================================================
+# Performance Configuration
+# =============================================================================
+
+# Central Cache Configuration
+UHI_CACHE_DIR = Path(__file__).parent.parent / "webapp" / "backend" / "cache"  # Central cache directory
+UHI_CACHE_MAX_AGE_DAYS = 30  # Maximum age for cached items
+UHI_CACHE_MAX_SIZE_GB = 5.0  # Maximum total cache size in GB
+UHI_CACHE_ENABLED = True  # Enable caching by default
+
+# Performance Modes for different use cases (KEEP - used by calling functions)
+UHI_PERFORMANCE_MODES = {
+    # Webapp preview mode - fast but lower resolution
+    "preview": {
+        "grid_cell_size": 300,           # Larger cells for speed
+        "cloud_cover_threshold": 40,     # More lenient cloud filtering
+        "hotspot_threshold": 0.85,       # Slightly lower threshold
+        "min_cluster_size": 3,           # Smaller minimum clusters
+        "skip_temporal_trends": True,    # Skip time-consuming temporal analysis
+        "max_pixels": 5e8,              # Reduced pixel limit
+        "batch_size": 1000,             # Smaller batches
+        "use_fast_analyzer": True        # Use FastUrbanHeatIslandAnalyzer
+    },
+    
+    # Fast mode - balanced speed and quality
+    "fast": {
+        "grid_cell_size": 200,           # Medium resolution
+        "cloud_cover_threshold": 30,     # Balanced cloud filtering
+        "hotspot_threshold": 0.9,        # Standard threshold
+        "min_cluster_size": 5,           # Standard clusters
+        "skip_temporal_trends": False,   # Include temporal analysis
+        "max_pixels": 1e9,              # Standard pixel limit
+        "batch_size": 3000,             # Medium batches
+        "use_fast_analyzer": True        # Use FastUrbanHeatIslandAnalyzer
+    },
+    
+    # Standard mode - default settings
+    "standard": {
+        "grid_cell_size": 100,           # Standard resolution
+        "cloud_cover_threshold": 20,     # Standard cloud filtering
+        "hotspot_threshold": 0.9,        # Standard threshold
+        "min_cluster_size": 5,           # Standard clusters
+        "skip_temporal_trends": False,   # Include temporal analysis
+        "max_pixels": 1e9,              # Standard pixel limit
+        "batch_size": 5000,             # Standard batches
+        "use_fast_analyzer": False       # Use regular analyzer for comparison
+    },
+    
+    # High quality mode - detailed analysis
+    "detailed": {
+        "grid_cell_size": 50,            # High resolution
+        "cloud_cover_threshold": 20,     # Reasonable cloud filtering
+        "hotspot_threshold": 0.95,       # High threshold
+        "min_cluster_size": 10,          # Larger minimum clusters
+        "skip_temporal_trends": False,   # Include temporal analysis
+        "max_pixels": 2e9,              # Higher pixel limit
+        "batch_size": 2000,             # Smaller batches for precision
+        "use_fast_analyzer": False       # Use regular analyzer for highest quality
+    }
+}
 
 # =============================================================================
 # UHI Analyzer Configuration

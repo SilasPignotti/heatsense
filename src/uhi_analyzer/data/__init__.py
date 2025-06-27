@@ -4,10 +4,12 @@ from .wfs_downloader import WFSDataDownloader
 from .corine_downloader import CorineDataDownloader
 from .dwd_downloader import DWDDataDownloader
 from .urban_heat_island_analyzer import UrbanHeatIslandAnalyzer
+from .fast_urban_heat_island_analyzer import FastUrbanHeatIslandAnalyzer
 
 __all__ = [
     "WFSDataDownloader", 
     "CorineDataDownloader",
     "DWDDataDownloader",
-    "UrbanHeatIslandAnalyzer"
+    "UrbanHeatIslandAnalyzer",
+    "FastUrbanHeatIslandAnalyzer"
 ] 
