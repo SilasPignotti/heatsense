@@ -21,18 +21,15 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional, Tuple
-import tempfile
 import shutil
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from uhi_analyzer import UrbanHeatIslandAnalyzer
-from uhi_analyzer.config.settings import UHI_LOG_DIR, UHI_CACHE_DIR
 from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
 from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
-from uhi_analyzer.utils.analyzer_factory import create_analyzer
 
 
 def setup_logging(output_dir: Path) -> logging.Logger:
@@ -162,7 +159,7 @@ def download_boundary_data(suburb: str, output_dir: Path, logger: logging.Logger
         if len(suburb_gdf) == 0:
             logger.warning(f"   Suburb '{suburb}' not found in {matching_column} column")
             logger.info(f"   Available localities: {localities_gdf[matching_column].tolist()}")
-            logger.warning(f"   Using all localities data instead")
+            logger.warning("   Using all localities data instead")
             return all_localities_path
         
         if len(suburb_gdf) > 1:
@@ -286,7 +283,7 @@ def download_weather_data(boundary_file: Path, start_date: date, end_date: date,
         
     except Exception as e:
         logger.error(f"   ❌ Error downloading weather data: {e}")
-        logger.warning(f"   Continuing analysis without ground truth weather data")
+        logger.warning("   Continuing analysis without ground truth weather data")
         return None
 
 
@@ -410,19 +407,19 @@ def run_uhi_analysis(boundary_file: Path, landcover_file: Path, weather_file: Op
         # Save detailed summary
         summary_path = output_dir / "analysis_summary.txt"
         with open(summary_path, 'w') as f:
-            f.write(f"Urban Heat Island Analysis Results\n")
+            f.write("Urban Heat Island Analysis Results\n")
             f.write("=" * 40 + "\n\n")
             f.write(f"Analysis completed: {date.today()}\n")
             f.write(f"Period: {start_date} to {end_date}\n")
             f.write(f"Boundary data: {boundary_file.name}\n")
             f.write(f"Land cover data: {landcover_file.name}\n")
             f.write(f"Weather data: {weather_file.name if weather_file else 'None (satellite only)'}\n")
-            f.write(f"Cloud threshold: 20%\n\n")
+            f.write("Cloud threshold: 20%\n\n")
             
             if 'temperature_statistics' in results:
                 temp_stats = results['temperature_statistics']
                 valid_temps = temp_stats['temperature'][~temp_stats['temperature'].isna()]
-                f.write(f"Temperature Analysis:\n")
+                f.write("Temperature Analysis:\n")
                 f.write(f"- Grid cells: {len(temp_stats)}\n")
                 f.write(f"- Valid temperatures: {len(valid_temps)}\n")
                 if len(valid_temps) > 0:
@@ -483,7 +480,7 @@ def run_uhi_analysis(boundary_file: Path, landcover_file: Path, weather_file: Op
                             f.write(f"{i}. {description}\n")
                             f.write(f"   Strategy type: {strategy}\n")
                             if 'locations' in rec:
-                                f.write(f"   Target areas: Specific hotspot locations identified\n")
+                                f.write("   Target areas: Specific hotspot locations identified\n")
                             f.write("\n")
             else:
                 f.write("Mitigation Recommendations: None generated\n")
@@ -636,7 +633,7 @@ Examples:
         )
         
         if success:
-            print(f"\n🎉 UHI analysis completed successfully!")
+            print("\n🎉 UHI analysis completed successfully!")
             print(f"📁 Results saved to: {output_dir}")
             
             # Clean up temporary data if requested

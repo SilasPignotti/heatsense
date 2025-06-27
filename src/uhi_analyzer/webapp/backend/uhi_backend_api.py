@@ -30,7 +30,7 @@ import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 import tempfile
 import uuid
 
@@ -394,24 +394,7 @@ class UHIAnalysisBackend:
         try:
             temp_dir = boundary_file.parent
             
-            # Determine Corine year based on analysis period
-            analysis_year = start_date.year
-            corine_year = 2018  # Default to latest available
-            
-            if analysis_year >= 2018:
-                corine_year = 2018
-            elif analysis_year >= 2012:
-                corine_year = 2012
-            elif analysis_year >= 2006:
-                corine_year = 2006
-            elif analysis_year >= 2000:
-                corine_year = 2000
-            else:
-                corine_year = 1990
-            
-            # Load boundary
-            import geopandas as gpd
-            boundary_gdf = gpd.read_file(boundary_file)
+            # Load boundary and process Corine data
             
             # Download Corine data
             from datetime import datetime
@@ -664,7 +647,7 @@ Examples:
             for error in result["errors"]:
                 print(f"   Error: {error}")
         
-        print(f"\n📋 Full results available in JSON format")
+        print("\n📋 Full results available in JSON format")
         
         # Output JSON for programmatic access
         print("\n" + json.dumps(result, indent=2, default=str))

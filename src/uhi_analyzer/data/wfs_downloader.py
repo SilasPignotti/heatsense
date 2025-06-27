@@ -11,10 +11,9 @@ import logging
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List, Tuple
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 import requests
 import geopandas as gpd
-import json
 from xml.etree import ElementTree as ET
 
 
@@ -444,15 +443,11 @@ class WFSDataDownloader:
                     elif 'numberOfFeatures' in elem.attrib:
                         return int(elem.attrib['numberOfFeatures'])
             
-            # Fallback: download small sample and estimate
-            gdf = self.download_to_geodataframe(
+            # Fallback: try small feature request
+            self.download_to_geodataframe(
                 endpoint_name=endpoint_name,
-                bbox=bbox,
-                cql_filter=cql_filter,
-                max_features=1000,
-                **kwargs
+                max_features=1
             )
-            return len(gdf)
             
         except Exception as e:
             self.logger.warning(f"Could not get feature count: {e}")
@@ -484,7 +479,7 @@ class WFSDataDownloader:
                     return True
             
             # Fallback: try small feature request
-            gdf = self.download_to_geodataframe(
+            self.download_to_geodataframe(
                 endpoint_name=endpoint_name,
                 max_features=1
             )

@@ -688,12 +688,10 @@ class UrbanHeatIslandAnalyzer:
             landuse_processed['landuse_group'] = landuse_processed['landuse_group'].fillna('unknown')
             landuse_processed['impervious_area'] = landuse_processed['landuse_group'].map(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)
             analysis_column = 'landuse_group'
-            coefficient_mapping = CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS
             self.logger.info(f"Using {len(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)} grouped land use categories")
         else:
             landuse_processed['impervious_area'] = landuse_processed['landuse_type'].map(CORINE_IMPERVIOUS_COEFFICIENTS)
             analysis_column = 'landuse_type'
-            coefficient_mapping = CORINE_IMPERVIOUS_COEFFICIENTS
             self.logger.info(f"Using {len(CORINE_IMPERVIOUS_COEFFICIENTS)} detailed land use categories")
         
         # Fill missing impervious area values

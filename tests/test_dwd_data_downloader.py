@@ -168,7 +168,6 @@ class TestDWDDataDownloader:
     def test_uhi_processing_method(self):
         """Test the UHI processing method directly."""
         # Create sample data
-        import pandas as pd
         from shapely.geometry import Point
         
         sample_data = gpd.GeoDataFrame({

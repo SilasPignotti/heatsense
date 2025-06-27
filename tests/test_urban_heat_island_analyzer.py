@@ -12,12 +12,11 @@ This test suite validates the core functionality of the UHI analyzer including:
 """
 
 import pytest
-import pandas as pd
 import geopandas as gpd
 import numpy as np
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from shapely.geometry import Point, Polygon
 import tempfile
 import json
@@ -513,7 +512,6 @@ class TestUrbanHeatIslandAnalyzer:
 
     def test_logging_configuration(self):
         """Test logging configuration."""
-        import logging
         
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = Path(temp_dir) / "test.log"
@@ -667,7 +665,6 @@ class TestUrbanHeatIslandAnalyzer:
 
     def test_custom_logger_initialization(self):
         """Test analyzer initialization with custom logger."""
-        import logging
         
         # Create custom logger
         custom_logger = logging.getLogger("test_custom_logger")
@@ -734,7 +731,7 @@ class TestUrbanHeatIslandAnalyzer:
                     # Should include ground validation
                     assert 'ground_validation' in results
                     
-                except Exception as e:
+                except Exception:
                     # Expected due to mocking, but should attempt validation
                     pass
 

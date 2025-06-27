@@ -7,7 +7,6 @@ for the UHI analyzer application.
 
 import os
 from pathlib import Path
-from typing import List
 
 # Load environment variables from .env file if available
 try:

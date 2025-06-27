@@ -13,10 +13,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union, Tuple
 import logging
 import geopandas as gpd
-import pandas as pd
-import numpy as np
 
-from ..config.settings import CRS_CONFIG, UHI_CACHE_DIR
+from ..config.settings import UHI_CACHE_DIR
 
 
 class CacheManager:

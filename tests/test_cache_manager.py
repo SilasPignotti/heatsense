@@ -14,14 +14,11 @@ This test suite validates the cache management functionality including:
 
 import pytest
 import geopandas as gpd
-import pandas as pd
 import numpy as np
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from unittest.mock import Mock, patch
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point
 import tempfile
-import json
 import pickle
 import logging
 import time

@@ -8,19 +8,14 @@ caching to dramatically improve performance by avoiding redundant API calls and 
 import ee
 import numpy as np
 import geopandas as gpd
-import pandas as pd
 import libpysal.weights
-import esda
 from typing import Dict, Union, List, Tuple, Optional
 from datetime import datetime, date
 import logging
 from pathlib import Path
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.stats import pearsonr
 from shapely.geometry import box
 import concurrent.futures
-from functools import lru_cache
 
 from ..config.settings import (
     UHI_EARTH_ENGINE_PROJECT,
@@ -35,12 +30,6 @@ from ..config.settings import (
     UHI_GRID_CELL_SIZE,
     UHI_HOTSPOT_THRESHOLD,
     UHI_MIN_CLUSTER_SIZE,
-    UHI_MORAN_SIGNIFICANCE,
-    UHI_PERCENTILES,
-    UHI_CORRELATION_THRESHOLD,
-    UHI_VISUALIZATION_DPI,
-    UHI_VISUALIZATION_FIGSIZE,
-    UHI_TEMPERATURE_COLORMAP,
     UHI_LOG_LEVEL,
     CRS_CONFIG,
     CORINE_LANDUSE_MAPPING,
@@ -50,8 +39,7 @@ from ..config.settings import (
     CORINE_GROUPED_DESCRIPTIONS,
     UHI_PERFORMANCE_MODES,
     UHI_CACHE_DIR,
-    UHI_CACHE_MAX_AGE_DAYS,
-    UHI_CACHE_MAX_SIZE_GB
+    UHI_CACHE_MAX_AGE_DAYS
 )
 from ..utils.cache_manager import CacheManager
 
@@ -202,7 +190,7 @@ class FastUrbanHeatIslandAnalyzer:
         self.logger.info("🚀 FAST URBAN HEAT ISLAND ANALYSIS STARTING")
         self.logger.info("=" * 60)
         self.logger.info(f"Analysis period: {date_range[0]} to {date_range[1]}")
-        self.logger.info(f"Using intelligent caching for performance optimization")
+        self.logger.info("Using intelligent caching for performance optimization")
         
         if not self.initialized:
             self.initialize_earth_engine()
@@ -838,11 +826,10 @@ class FastUrbanHeatIslandAnalyzer:
         
         try:
             temp_stats = results.get('temperature_statistics', gpd.GeoDataFrame())
-            hot_spots = results.get('hot_spots', gpd.GeoDataFrame())
             landuse_data = results.get('land_use_correlation', {})
             
-            # High temperature areas recommendation
-            if not temp_stats.empty and 'temperature' in temp_stats.columns:
+            if not temp_stats.empty:
+                # High temperature areas recommendation
                 high_temp_threshold = temp_stats['temperature'].quantile(0.9)
                 high_temp_count = len(temp_stats[temp_stats['temperature'] > high_temp_threshold])
                 

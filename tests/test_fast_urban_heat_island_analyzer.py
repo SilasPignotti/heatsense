@@ -13,16 +13,12 @@ This test suite validates the fast UHI analyzer with caching optimizations inclu
 """
 
 import pytest
-import pandas as pd
 import geopandas as gpd
-import numpy as np
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from shapely.geometry import Point, Polygon
 import tempfile
-import json
-import logging
 
 # Import the class under test
 import sys
@@ -31,9 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from uhi_analyzer.data.fast_urban_heat_island_analyzer import FastUrbanHeatIslandAnalyzer
 from uhi_analyzer.utils.cache_manager import CacheManager
 from uhi_analyzer.config.settings import (
-    UHI_EARTH_ENGINE_PROJECT, UHI_CLOUD_COVER_THRESHOLD, UHI_GRID_CELL_SIZE, 
-    UHI_HOTSPOT_THRESHOLD, UHI_MIN_CLUSTER_SIZE, CRS_CONFIG, UHI_PERFORMANCE_MODES,
-    UHI_CACHE_DIR
+    UHI_CLOUD_COVER_THRESHOLD, UHI_GRID_CELL_SIZE, 
+    UHI_HOTSPOT_THRESHOLD, UHI_MIN_CLUSTER_SIZE, CRS_CONFIG, UHI_PERFORMANCE_MODES
 )
 
 
