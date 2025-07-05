@@ -8,37 +8,14 @@ from typing import Dict, Union, List, Tuple, Optional
 from datetime import datetime, date
 import logging
 from pathlib import Path
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.stats import pearsonr
 from shapely.geometry import box
+from uhi_analyzer.utils.data_processor import process_corine_for_uhi, CORINE_GROUPED_DESCRIPTIONS, enhance_weather_data_for_uhi
 
-from ..config.settings import (
+from uhi_analyzer.config.settings import (
     UHI_EARTH_ENGINE_PROJECT,
-    UHI_CLOUD_COVER_THRESHOLD,
-    UHI_LANDSAT_COLLECTION,
-    UHI_TEMPERATURE_BAND,
-    UHI_SCALE,
-    UHI_MAX_PIXELS,
-    UHI_TEMP_MULTIPLIER,
-    UHI_TEMP_ADDEND,
-    UHI_KELVIN_OFFSET,
-    UHI_GRID_CELL_SIZE,
-    UHI_HOTSPOT_THRESHOLD,
-    UHI_MIN_CLUSTER_SIZE,
-    UHI_MORAN_SIGNIFICANCE,
-    UHI_PERCENTILES,
-    UHI_CORRELATION_THRESHOLD,
-    UHI_VISUALIZATION_DPI,
-    UHI_VISUALIZATION_FIGSIZE,
-    UHI_TEMPERATURE_COLORMAP,
     UHI_LOG_LEVEL,
     CRS_CONFIG,
-    CORINE_LANDUSE_MAPPING,
-    CORINE_IMPERVIOUS_COEFFICIENTS,
-    CORINE_DETAILED_TO_GROUPED,
-    CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS,
-    CORINE_GROUPED_DESCRIPTIONS
 )
 
 class UrbanHeatIslandAnalyzer:
@@ -67,12 +44,14 @@ class UrbanHeatIslandAnalyzer:
     
     def __init__(
         self, 
-        cloud_cover_threshold: float = UHI_CLOUD_COVER_THRESHOLD,
-        grid_cell_size: float = UHI_GRID_CELL_SIZE,
-        hotspot_threshold: float = UHI_HOTSPOT_THRESHOLD,
-        min_cluster_size: int = UHI_MIN_CLUSTER_SIZE,
+        cloud_cover_threshold: float = 20,  # Maximum acceptable cloud cover percentage (0-100)
+        grid_cell_size: float = 100,  # Analysis grid cell size in meters
+        hotspot_threshold: float = 0.9,  # Percentile threshold for hotspot identification
+        min_cluster_size: int = 5,  # Minimum number of cells for a valid hotspot cluster
+        use_grouped_categories: bool = True,
         log_file: Optional[Path] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        skip_temporal_trends: bool = False,
     ):
         """
         Initialize the Urban Heat Island analyzer.
@@ -82,16 +61,19 @@ class UrbanHeatIslandAnalyzer:
             grid_cell_size: Analysis grid cell size in meters
             hotspot_threshold: Percentile threshold for hotspot identification (0-1)
             min_cluster_size: Minimum number of cells for a valid hotspot cluster
+            use_grouped_categories: If True, use grouped categories for cleaner analysis
             log_file: Optional path for log file
             logger: Optional logger instance
+            skip_temporal_trends: If True, skip temporal trends analysis
         """
         self.cloud_threshold = cloud_cover_threshold
         self.grid_cell_size = grid_cell_size
         self.hotspot_threshold = hotspot_threshold
         self.min_cluster_size = min_cluster_size
+        self.use_grouped_categories = use_grouped_categories
         self.initialized = False
         self.logger = logger or self._setup_logger(log_file)
-        
+        self.skip_temporal_trends = skip_temporal_trends
         self.logger.info(f"UHI Analyzer initialized: cloud_threshold={cloud_cover_threshold}%, "
                         f"grid_size={grid_cell_size}m, hotspot_threshold={hotspot_threshold}")
 
@@ -162,8 +144,6 @@ class UrbanHeatIslandAnalyzer:
         date_range: Tuple[date, date],
         landuse_data: Union[str, gpd.GeoDataFrame],
         weather_stations: Optional[gpd.GeoDataFrame] = None,
-        save_intermediate: bool = False,
-        output_dir: Optional[Path] = None
     ) -> Dict:
         """
         Perform comprehensive urban heat island analysis.
@@ -173,8 +153,6 @@ class UrbanHeatIslandAnalyzer:
             date_range: Tuple of start and end dates for analysis
             landuse_data: Path to land use data or GeoDataFrame  
             weather_stations: Optional GeoDataFrame with ground temperature measurements
-            save_intermediate: Whether to save intermediate results
-            output_dir: Directory for saving intermediate files
         
         Returns:
             Dictionary containing comprehensive heat island analysis results
@@ -189,22 +167,12 @@ class UrbanHeatIslandAnalyzer:
         if not self.initialized:
             self.initialize_earth_engine()
 
-        # Prepare output directory
-        if save_intermediate and output_dir:
-            output_dir = Path(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"Intermediate results will be saved to: {output_dir}")
-
         try:
             # Phase 1: Load and validate input data
             self.logger.info("Phase 1: Loading and validating input data")
             city_area = self._load_geodata(city_boundary, "city boundary")
             landuse = self._load_geodata(landuse_data, "land use")
             
-            if save_intermediate and output_dir:
-                city_area.to_file(output_dir / "city_boundary_processed.geojson")
-                landuse.to_file(output_dir / "landuse_processed.geojson")
-
             # Phase 2: Satellite data acquisition  
             self.logger.info("Phase 2: Acquiring satellite data")
             landsat_collection = self._get_landsat_collection(
@@ -219,9 +187,6 @@ class UrbanHeatIslandAnalyzer:
             if temp_stats.empty:
                 raise ValueError("No temperature data could be extracted for the specified area and time period")
             
-            if save_intermediate and output_dir:
-                temp_stats.to_file(output_dir / "temperature_stats.geojson")
-
             # Phase 4: Land use correlation
             self.logger.info("Phase 4: Analyzing land use correlations")
             landuse_correlation = self._analyze_landuse_correlation(temp_stats, landuse)
@@ -230,14 +195,14 @@ class UrbanHeatIslandAnalyzer:
             self.logger.info("Phase 5: Identifying heat hotspots")
             hot_spots = self._identify_heat_hotspots(temp_stats)
             
-            if save_intermediate and output_dir and not hot_spots.empty:
-                hot_spots.to_file(output_dir / "heat_hotspots.geojson")
-
             # Phase 6: Temporal analysis
             self.logger.info("Phase 6: Analyzing temporal trends")
-            temporal_trends = self._analyze_temporal_trends(
-                hot_spots, landsat_collection, date_range[0].year
-            )
+            if not self.skip_temporal_trends:
+                temporal_trends = self._analyze_temporal_trends(
+                    hot_spots, landsat_collection, date_range[0].year
+                )
+            else:
+                temporal_trends = None
 
             # Compile base results
             results = {
@@ -256,6 +221,9 @@ class UrbanHeatIslandAnalyzer:
 
             # Phase 7: Ground validation (optional)
             if weather_stations is not None:
+                self.logger.info("Phase 7: Enhancing weather data for UHI analysis")
+                weather_stations = enhance_weather_data_for_uhi(weather_stations, self.logger)
+                
                 self.logger.info("Phase 7: Validating with ground weather station data")
                 results['ground_validation'] = self._validate_with_ground_data(temp_stats, weather_stations)
 
@@ -300,115 +268,6 @@ class UrbanHeatIslandAnalyzer:
         except Exception as e:
             self.logger.warning(f"Error logging analysis summary: {str(e)}")
 
-    def save_results(
-        self, 
-        results: Dict, 
-        output_dir: Path, 
-        prefix: str = "uhi_analysis"
-    ) -> Dict[str, Path]:
-        """
-        Save analysis results to files.
-        
-        Args:
-            results: Analysis results dictionary
-            output_dir: Output directory path
-            prefix: File name prefix
-            
-        Returns:
-            Dictionary mapping result types to saved file paths
-        """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        saved_files = {}
-        
-        try:
-            # Save temperature statistics
-            if 'temperature_statistics' in results and not results['temperature_statistics'].empty:
-                temp_path = output_dir / f"{prefix}_temperature_stats.geojson"
-                results['temperature_statistics'].to_file(temp_path)
-                saved_files['temperature_statistics'] = temp_path
-                
-            # Save hotspots
-            if 'hot_spots' in results and not results['hot_spots'].empty:
-                hotspots_path = output_dir / f"{prefix}_hotspots.geojson"
-                results['hot_spots'].to_file(hotspots_path)
-                saved_files['hot_spots'] = hotspots_path
-                
-            # Save correlation analysis
-            if 'land_use_correlation' in results:
-                import json
-                correlation_path = output_dir / f"{prefix}_landuse_correlation.json"
-                with open(correlation_path, 'w') as f:
-                    json.dump(results['land_use_correlation'], f, indent=2, default=str)
-                saved_files['land_use_correlation'] = correlation_path
-                
-            # Save recommendations
-            if 'mitigation_recommendations' in results:
-                import json
-                recommendations_path = output_dir / f"{prefix}_recommendations.json"
-                with open(recommendations_path, 'w') as f:
-                    json.dump(results['mitigation_recommendations'], f, indent=2, default=str)
-                saved_files['mitigation_recommendations'] = recommendations_path
-                
-            # Save metadata and summary
-            summary_path = output_dir / f"{prefix}_summary.json"
-            summary = {
-                'metadata': results.get('metadata', {}),
-                'analysis_summary': {
-                    'total_grid_cells': len(results.get('temperature_statistics', [])),
-                    'hotspots_identified': len(results.get('hot_spots', [])),
-                    'land_use_types_analyzed': len(results.get('land_use_correlation', {}).get('statistics', {})),
-                    'ground_stations_used': len(results.get('ground_validation', {}).get('comparison_data', []))
-                }
-            }
-            
-            with open(summary_path, 'w') as f:
-                json.dump(summary, f, indent=2, default=str)
-            saved_files['summary'] = summary_path
-            
-            self.logger.info(f"Analysis results saved to {output_dir}")
-            self.logger.info(f"Files created: {', '.join(saved_files.keys())}")
-            
-            return saved_files
-            
-        except Exception as e:
-            self.logger.error(f"Error saving results: {str(e)}")
-            raise
-
-    @staticmethod
-    def get_default_parameters() -> Dict[str, any]:
-        """
-        Get default configuration parameters for UHI analysis.
-        
-        Returns:
-            Dictionary with default parameters
-        """
-        return {
-            'earth_engine_project': UHI_EARTH_ENGINE_PROJECT,
-            'cloud_cover_threshold': UHI_CLOUD_COVER_THRESHOLD,
-            'landsat_collection': UHI_LANDSAT_COLLECTION,
-            'temperature_band': UHI_TEMPERATURE_BAND,
-            'scale': UHI_SCALE,
-            'max_pixels': UHI_MAX_PIXELS,
-            'grid_cell_size': UHI_GRID_CELL_SIZE,
-            'hotspot_threshold': UHI_HOTSPOT_THRESHOLD,
-            'min_cluster_size': UHI_MIN_CLUSTER_SIZE,
-            'moran_significance': UHI_MORAN_SIGNIFICANCE,
-            'percentiles': UHI_PERCENTILES,
-            'correlation_threshold': UHI_CORRELATION_THRESHOLD,
-            'temperature_conversion': {
-                'multiplier': UHI_TEMP_MULTIPLIER,
-                'addend': UHI_TEMP_ADDEND,
-                'kelvin_offset': UHI_KELVIN_OFFSET
-            },
-            'visualization': {
-                'dpi': UHI_VISUALIZATION_DPI,
-                'figsize': UHI_VISUALIZATION_FIGSIZE,
-                'colormap': UHI_TEMPERATURE_COLORMAP
-            }
-        }
-
     def _load_geodata(
         self,
         data: Union[str, gpd.GeoDataFrame],
@@ -449,11 +308,11 @@ class UrbanHeatIslandAnalyzer:
 
             # Get Landsat collection
             collection = (
-                ee.ImageCollection(UHI_LANDSAT_COLLECTION)
+                ee.ImageCollection("LANDSAT/LC08/C02/T1_L2") # Landsat 8 Collection 2 Tier 1 Level 2
                 .filterBounds(ee_geometry)
                 .filterDate(start_date_str, end_date_str)
                 .filter(ee.Filter.lt('CLOUD_COVER', self.cloud_threshold))
-                .select([UHI_TEMPERATURE_BAND])  # Surface temperature band
+                .select("ST_B10")  # Surface temperature band
             )
 
             collection_size = collection.size().getInfo()
@@ -476,34 +335,21 @@ class UrbanHeatIslandAnalyzer:
         self.logger.info("Calculating temperature statistics from satellite data")
         
         # Convert Landsat 8 ST_B10 to Celsius
-        # Landsat 8 ST_B10 is already in Kelvin, so we just subtract 273.15
-        temp_image = collection.mean().select(UHI_TEMPERATURE_BAND).multiply(UHI_TEMP_MULTIPLIER).add(UHI_TEMP_ADDEND).subtract(UHI_KELVIN_OFFSET)
+        temp_image = collection.mean().select("ST_B10").multiply(0.00341802).add(149.0).subtract(273.15)
 
         # Calculate various statistics
         stats = temp_image.reduceRegion(
-            reducer=ee.Reducer.percentile(UHI_PERCENTILES)
+            reducer=ee.Reducer.percentile([10, 25, 50, 75, 90])
             .combine(ee.Reducer.mean(), None, True)
             .combine(ee.Reducer.stdDev(), None, True),
             geometry=ee.Geometry.Rectangle(boundary.geometry.iloc[0].bounds),
-            scale=UHI_SCALE,
-            maxPixels=UHI_MAX_PIXELS
+            scale=30,  # Analysis scale in meters
+            maxPixels=1e9  # Maximum pixels for Earth Engine operations
         ).getInfo()
 
         # Log temperature statistics
         if stats:
-            temp_band_key = f"{UHI_TEMPERATURE_BAND}_mean"
-            # Handle case where stats might be a Mock object (in tests)
-            try:
-                if hasattr(stats, 'get') and stats.get(temp_band_key) is not None:
-                    mean_temp = stats[temp_band_key]
-                    self.logger.info(f"Mean temperature from satellite: {mean_temp:.1f}°C")
-                elif isinstance(stats, dict) and temp_band_key in stats:
-                    mean_temp = stats[temp_band_key]
-                    self.logger.info(f"Mean temperature from satellite: {mean_temp:.1f}°C")
-            except (TypeError, AttributeError):
-                # Handle Mock objects or other non-dict types
-                self.logger.debug("Could not extract temperature statistics (possibly mocked)")
-                pass
+            temp_band_key = "ST_B10_mean"
 
         # Create spatial grid for detailed analysis
         self.logger.info("Creating analysis grid for spatial analysis")
@@ -529,15 +375,7 @@ class UrbanHeatIslandAnalyzer:
         """Create analysis grid for detailed spatial analysis."""
         if cell_size is None:
             cell_size = self.grid_cell_size
-            
-        # For large areas like Berlin, use a larger cell size to reduce processing time
-        # while maintaining reasonable spatial resolution
-        if cell_size == 100:  # Default case
-            total_area = boundary.to_crs(CRS_CONFIG["WEB_MERCATOR"]).area.sum() / 1e6  # Area in km²
-            if total_area > 500:  # If area > 500 km²
-                cell_size = 200  # Use 200m cells instead of 100m
-                self.logger.info(f"Large study area detected ({total_area:.0f} km²), using {cell_size}m grid cells")
-            
+        
         # Reproject to a projected CRS
         boundary = boundary.to_crs(CRS_CONFIG["WEB_MERCATOR"])
 
@@ -591,7 +429,7 @@ class UrbanHeatIslandAnalyzer:
                 temp_values = temp_image.reduceRegions(
                     collection=batch_fc,
                     reducer=ee.Reducer.mean(),
-                    scale=UHI_SCALE
+                    scale=30
                 )
                 
                 # Get the results and convert to numpy array
@@ -610,7 +448,7 @@ class UrbanHeatIslandAnalyzer:
                         
                         # Try different possible temperature property names
                         temp_value = None
-                        for temp_key in [UHI_TEMPERATURE_BAND, 'mean', 'ST_B10', 'temperature']:
+                        for temp_key in ["ST_B10", 'mean', 'ST_B10', 'temperature']:
                             if temp_key in properties and properties[temp_key] is not None:
                                 temp_value = properties[temp_key]
                                 break
@@ -652,16 +490,17 @@ class UrbanHeatIslandAnalyzer:
         self,
         temp_data: gpd.GeoDataFrame,
         landuse: gpd.GeoDataFrame,
-        use_grouped_categories: bool = True
+        use_grouped_categories: Optional[bool] = None
     ) -> Dict:
         """
         Analyze correlation between land use and temperature.
-        
         Args:
             temp_data: GeoDataFrame with temperature grid
             landuse: GeoDataFrame with land use data
             use_grouped_categories: If True, use grouped categories for cleaner analysis
         """
+        if use_grouped_categories is None:
+            use_grouped_categories = self.use_grouped_categories
         self.logger.info(f"Analyzing land use and temperature correlations "
                         f"({'grouped' if use_grouped_categories else 'detailed'} categories)")
         
@@ -670,32 +509,20 @@ class UrbanHeatIslandAnalyzer:
             landuse = landuse.to_crs(temp_data.crs)
             self.logger.info(f"Reprojected land use data to {temp_data.crs}")
         
-        # Check for required columns and map them if needed
-        landuse_processed = landuse.copy()
+        # Always process land use data before correlation/statistics
+        landuse_processed = process_corine_for_uhi(
+            landuse, group_landuse=use_grouped_categories
+        )
+        analysis_column = 'landuse_type'
         
-        # Map CORINE land cover codes to land use types if needed
-        if 'CODE_18' in landuse_processed.columns and 'landuse_type' not in landuse_processed.columns:
-            landuse_processed['landuse_type'] = landuse_processed['CODE_18'].map(CORINE_LANDUSE_MAPPING)
-            self.logger.info("Mapped CORINE codes to detailed land use types")
-        elif 'landuse_type' not in landuse_processed.columns:
-            # If no recognizable land use column, create a default one
-            landuse_processed['landuse_type'] = 'unknown'
-            self.logger.warning("No land use type column found, using default values")
-        
-        # Group categories if requested
+        # Optionally build category descriptions
+        category_descriptions = {}
         if use_grouped_categories:
-            landuse_processed['landuse_group'] = landuse_processed['landuse_type'].map(CORINE_DETAILED_TO_GROUPED)
-            landuse_processed['landuse_group'] = landuse_processed['landuse_group'].fillna('unknown')
-            landuse_processed['impervious_area'] = landuse_processed['landuse_group'].map(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)
-            analysis_column = 'landuse_group'
-            self.logger.info(f"Using {len(CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS)} grouped land use categories")
-        else:
-            landuse_processed['impervious_area'] = landuse_processed['landuse_type'].map(CORINE_IMPERVIOUS_COEFFICIENTS)
-            analysis_column = 'landuse_type'
-            self.logger.info(f"Using {len(CORINE_IMPERVIOUS_COEFFICIENTS)} detailed land use categories")
-        
-        # Fill missing impervious area values
-        landuse_processed['impervious_area'] = landuse_processed['impervious_area'].fillna(0.5)
+            for category in landuse_processed[analysis_column].unique():
+                if category in CORINE_GROUPED_DESCRIPTIONS:
+                    category_descriptions[category] = CORINE_GROUPED_DESCRIPTIONS[category]
+                else:
+                    category_descriptions[category] = f"Unknown category: {category}"
         
         # Spatial join between temperature grid and land use
         try:
@@ -765,15 +592,6 @@ class UrbanHeatIslandAnalyzer:
 
         self.logger.info(f"Land use correlation analysis completed for {len(correlations)} categories")
         
-        # Add category descriptions if using grouped categories
-        category_descriptions = {}
-        if use_grouped_categories:
-            for category in unique_types:
-                if category in CORINE_GROUPED_DESCRIPTIONS:
-                    category_descriptions[category] = CORINE_GROUPED_DESCRIPTIONS[category]
-                else:
-                    category_descriptions[category] = f"Unknown category: {category}"
-        
         return {
             'statistics': stats.to_dict(),
             'correlations': correlations,
@@ -812,7 +630,7 @@ class UrbanHeatIslandAnalyzer:
 
         # Identify significant hot spots
         hotspots = temp_data[
-            (moran_loc.p_sim < UHI_MORAN_SIGNIFICANCE) &
+            (moran_loc.p_sim < 0.05) &
             (temp_data.temperature > temp_data.temperature.quantile(threshold))
         ].copy()
 
@@ -885,16 +703,16 @@ class UrbanHeatIslandAnalyzer:
                 def process_images():
                     monthly_mean_image = (
                         monthly_collection.mean()
-                        .select(UHI_TEMPERATURE_BAND)
-                        .multiply(UHI_TEMP_MULTIPLIER)
-                        .add(UHI_TEMP_ADDEND)
-                        .subtract(UHI_KELVIN_OFFSET)
+                        .select('ST_B10')  # Landsat thermal band
+                        .multiply(0.00341802)  # Convert to Kelvin
+                        .add(149.0)  # Offset correction
+                        .subtract(273.15)  # Convert Kelvin to Celsius
                     )
 
                     reduced_features = monthly_mean_image.reduceRegions(
                         collection=hotspot_features,
                         reducer=ee.Reducer.mean(),
-                        scale=UHI_SCALE,
+                        scale=30,  # Landsat resolution in meters
                     )
 
                     return reduced_features.map(lambda feature: feature.set('month', month))
@@ -1075,7 +893,7 @@ class UrbanHeatIslandAnalyzer:
             # Check if we have correlations data
             if 'correlations' in land_use_data and 'impervious_surface' in land_use_data['correlations']:
                 corr = land_use_data['correlations']['impervious_surface']
-                if corr['correlation'] > UHI_CORRELATION_THRESHOLD:
+                if corr['correlation'] > 0.5:
                     recommendations.append({
                         'strategy': 'surface_modification',
                         'description': 'Implement cool roofs and permeable pavements',
@@ -1097,262 +915,4 @@ class UrbanHeatIslandAnalyzer:
 
         self.logger.info(f"Generated {len(recommendations)} mitigation recommendations")
         return recommendations
-
-    def visualize_results(
-        self,
-        results: Dict,
-        output_path: Optional[str] = None
-    ) -> None:
-        """Create visualization of heat island analysis results."""
-        self.logger.info("Creating visualization of analysis results")
-        
-        try:
-            fig, axes = plt.subplots(2, 2, figsize=UHI_VISUALIZATION_FIGSIZE)
-            plots_created = 0
-
-            # Plot 1: Temperature distribution
-            if 'temperature_statistics' in results and not results['temperature_statistics'].empty:
-                temp_data = results['temperature_statistics']
-                valid_temps = temp_data['temperature'][~pd.isna(temp_data['temperature'])]
-                
-                if len(valid_temps) > 0:
-                    sns.histplot(data=valid_temps, ax=axes[0, 0], bins=30)
-                    axes[0, 0].set_title(f'Temperature Distribution (n={len(valid_temps)})')
-                    axes[0, 0].set_xlabel('Temperature (°C)')
-                    axes[0, 0].set_ylabel('Frequency')
-                    plots_created += 1
-                else:
-                    axes[0, 0].text(0.5, 0.5, 'No valid temperature data', 
-                                  ha='center', va='center', transform=axes[0, 0].transAxes)
-                    axes[0, 0].set_title('Temperature Distribution - No Data')
-            else:
-                axes[0, 0].text(0.5, 0.5, 'No temperature statistics available', 
-                              ha='center', va='center', transform=axes[0, 0].transAxes)
-                axes[0, 0].set_title('Temperature Distribution - No Data')
-
-            # Plot 2: Land use correlation
-            if 'land_use_correlation' in results and 'statistics' in results['land_use_correlation']:
-                try:
-                    stats_dict = results['land_use_correlation']['statistics']
-                    if stats_dict:
-                        stats_df = pd.DataFrame(stats_dict)
-                        if 'temperature_mean' in stats_df.columns and len(stats_df) > 0:
-                            # Create bar plot
-                            x_pos = range(len(stats_df))
-                            axes[0, 1].bar(x_pos, stats_df['temperature_mean'])
-                            axes[0, 1].set_xticks(x_pos)
-                            
-                            # Use the first column as category labels (could be landuse_type or landuse_group)
-                            category_col = stats_df.columns[0]
-                            category_labels = stats_df[category_col]
-                            
-                            # Shorten labels if they're too long
-                            shortened_labels = []
-                            for label in category_labels:
-                                if len(str(label)) > 15:
-                                    shortened_labels.append(str(label)[:15] + '...')
-                                else:
-                                    shortened_labels.append(str(label))
-                            
-                            axes[0, 1].set_xticklabels(shortened_labels, rotation=45, ha='right')
-                            
-                            # Determine title based on analysis type
-                            analysis_type = results['land_use_correlation'].get('analysis_type', 'detailed')
-                            title = f'Mean Temperature by Land Use ({analysis_type.title()})'
-                            axes[0, 1].set_title(title)
-                            axes[0, 1].set_ylabel('Temperature (°C)')
-                            plots_created += 1
-                        else:
-                            axes[0, 1].text(0.5, 0.5, 'No land use temperature data', 
-                                          ha='center', va='center', transform=axes[0, 1].transAxes)
-                            axes[0, 1].set_title('Land Use Temperature - No Data')
-                    else:
-                        axes[0, 1].text(0.5, 0.5, 'No land use statistics', 
-                                      ha='center', va='center', transform=axes[0, 1].transAxes)
-                        axes[0, 1].set_title('Land Use Temperature - No Data')
-                except Exception as e:
-                    self.logger.warning(f"Error creating land use plot: {str(e)}")
-                    axes[0, 1].text(0.5, 0.5, f'Error: {str(e)}', 
-                                  ha='center', va='center', transform=axes[0, 1].transAxes)
-                    axes[0, 1].set_title('Land Use Temperature - Error')
-            else:
-                axes[0, 1].text(0.5, 0.5, 'No land use correlation data', 
-                              ha='center', va='center', transform=axes[0, 1].transAxes)
-                axes[0, 1].set_title('Land Use Temperature - No Data')
-
-            # Plot 3: Hot spots map with city boundary
-            if 'hot_spots' in results and not results['hot_spots'].empty:
-                hotspots = results['hot_spots']
-                
-                
-                # Plot city boundary first (as background)
-                city_boundary = self.city_boundary
-                if city_boundary is not None:
-                    city_boundary.boundary.plot(ax=axes[1, 0], color='black', linewidth=1.5, alpha=0.7)
-                
-                # Plot hotspots
-                if 'temperature' in hotspots.columns:
-                    hotspots.plot(
-                        column='temperature',
-                        cmap=UHI_TEMPERATURE_COLORMAP,
-                        ax=axes[1, 0],
-                        legend=True,
-                        markersize=20,
-                        alpha=0.8
-                    )
-                    axes[1, 0].set_title(f'Heat Island Hot Spots (n={len(hotspots)})')
-                    axes[1, 0].set_xlabel('Longitude')
-                    axes[1, 0].set_ylabel('Latitude')
-                    plots_created += 1
-                else:
-                    hotspots.plot(ax=axes[1, 0], color='red', markersize=20, alpha=0.8)
-                    axes[1, 0].set_title(f'Heat Island Hot Spots (n={len(hotspots)})')
-                    axes[1, 0].set_xlabel('Longitude')
-                    axes[1, 0].set_ylabel('Latitude')
-                    plots_created += 1
-                
-                # Add city boundary legend
-                if city_boundary is not None:
-                    axes[1, 0].text(0.02, 0.98, 'Berlin Boundary', transform=axes[1, 0].transAxes, 
-                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
-                                   verticalalignment='top', fontsize=8)
-            else:
-                axes[1, 0].text(0.5, 0.5, 'No hot spots identified', 
-                              ha='center', va='center', transform=axes[1, 0].transAxes)
-                axes[1, 0].set_title('Heat Island Hot Spots - None Found')
-
-            # Plot 4: Improved temporal trends or alternative visualization
-            if 'temporal_trends' in results and results['temporal_trends']:
-                try:
-                    trends = results['temporal_trends']
-                    if isinstance(trends, dict) and 'features' in trends:
-                        # Extract monthly temperature data
-                        monthly_data = []
-                        for feature in trends['features']:
-                            if 'properties' in feature:
-                                props = feature['properties']
-                                month = props.get('month')
-                                
-                                # Try different possible temperature property names
-                                temp = None
-                                for temp_key in ['mean', UHI_TEMPERATURE_BAND, 'temperature', 'ST_B10']:
-                                    if temp_key in props and props[temp_key] is not None:
-                                        temp = props[temp_key]
-                                        break
-                                
-                                if month is not None and temp is not None:
-                                    monthly_data.append({'month': month, 'temperature': temp})
-                        
-                        if len(monthly_data) > 1:  # Only show trend if we have multiple months
-                            trend_df = pd.DataFrame(monthly_data)
-                            
-                            # Group by month and calculate mean temperature for each month
-                            monthly_means = trend_df.groupby('month')['temperature'].agg(['mean', 'std', 'count']).reset_index()
-                            
-                            # Create the plot
-                            axes[1, 1].plot(monthly_means['month'], monthly_means['mean'], 
-                                           marker='o', linewidth=2, markersize=8, color='red')
-                            
-                            # Add error bars if we have multiple measurements per month
-                            if (monthly_means['std'] > 0).any():
-                                axes[1, 1].errorbar(monthly_means['month'], monthly_means['mean'], 
-                                                  yerr=monthly_means['std'], alpha=0.3, capsize=5)
-                            
-                            axes[1, 1].set_title(f'Monthly Temperature Trends in Hotspots\n(n={len(trend_df)} measurements)')
-                            axes[1, 1].set_xlabel('Month')
-                            axes[1, 1].set_ylabel('Temperature (°C)')
-                            axes[1, 1].set_xticks(range(1, 13))
-                            axes[1, 1].set_xticklabels(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                                                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], rotation=45)
-                            axes[1, 1].grid(True, alpha=0.3)
-                            
-                            plots_created += 1
-                            
-                            # Log some statistics
-                            self.logger.info(f"Temporal trends plot created with {len(monthly_data)} data points across {len(monthly_means)} months")
-                            if len(monthly_means) > 0:
-                                temp_range = f"{monthly_means['mean'].min():.1f}°C - {monthly_means['mean'].max():.1f}°C"
-                                self.logger.info(f"Monthly temperature range in hotspots: {temp_range}")
-                        else:
-                            # Show temperature distribution of hotspots instead
-                            if 'hot_spots' in results and not results['hot_spots'].empty and 'temperature' in results['hot_spots'].columns:
-                                hotspot_temps = results['hot_spots']['temperature'][~pd.isna(results['hot_spots']['temperature'])]
-                                if len(hotspot_temps) > 0:
-                                    sns.histplot(data=hotspot_temps, ax=axes[1, 1], bins=20, color='red', alpha=0.7)
-                                    axes[1, 1].set_title(f'Hotspot Temperature Distribution\n(n={len(hotspot_temps)} hotspots)')
-                                    axes[1, 1].set_xlabel('Temperature (°C)')
-                                    axes[1, 1].set_ylabel('Frequency')
-                                    axes[1, 1].grid(True, alpha=0.3)
-                                    plots_created += 1
-                                else:
-                                    axes[1, 1].text(0.5, 0.5, 'No hotspot temperature data', 
-                                                  ha='center', va='center', transform=axes[1, 1].transAxes)
-                                    axes[1, 1].set_title('Hotspot Temperatures - No Data')
-                            else:
-                                axes[1, 1].text(0.5, 0.5, 'Limited temporal data\n(only single month available)', 
-                                              ha='center', va='center', transform=axes[1, 1].transAxes)
-                                axes[1, 1].set_title('Temporal Trends - Limited Data')
-                    else:
-                        axes[1, 1].text(0.5, 0.5, 'Invalid temporal trend format', 
-                                      ha='center', va='center', transform=axes[1, 1].transAxes)
-                        axes[1, 1].set_title('Temporal Trends - Invalid Data')
-                        self.logger.warning(f"Temporal trends data format issue: expected dict with 'features', got {type(trends)}")
-                except Exception as e:
-                    self.logger.warning(f"Error creating temporal trends plot: {str(e)}")
-                    axes[1, 1].text(0.5, 0.5, f'Error: {str(e)}', 
-                                  ha='center', va='center', transform=axes[1, 1].transAxes)
-                    axes[1, 1].set_title('Temporal Trends - Error')
-            else:
-                # Show temperature statistics summary instead
-                if 'temperature_statistics' in results and not results['temperature_statistics'].empty:
-                    temp_data = results['temperature_statistics']
-                    valid_temps = temp_data['temperature'][~pd.isna(temp_data['temperature'])]
-                    if len(valid_temps) > 0:
-                        # Create summary statistics text
-                        mean_temp = valid_temps.mean()
-                        min_temp = valid_temps.min()
-                        max_temp = valid_temps.max()
-                        std_temp = valid_temps.std()
-                        
-                        summary_text = f"""Temperature Analysis Summary
-                        
-Mean: {mean_temp:.1f}°C
-Range: {min_temp:.1f}°C - {max_temp:.1f}°C
-Std Dev: {std_temp:.1f}°C
-Grid Cells: {len(valid_temps):,}
-
-Hotspots: {len(results.get('hot_spots', []))}
-Analysis Period: Summer 2022"""
-                        
-                        axes[1, 1].text(0.1, 0.9, summary_text, transform=axes[1, 1].transAxes,
-                                       fontsize=10, verticalalignment='top',
-                                       bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue", alpha=0.8))
-                        axes[1, 1].set_title('Analysis Summary')
-                        axes[1, 1].set_xlim(0, 1)
-                        axes[1, 1].set_ylim(0, 1)
-                        axes[1, 1].axis('off')
-                        plots_created += 1
-                    else:
-                        axes[1, 1].text(0.5, 0.5, 'No temperature data available', 
-                                      ha='center', va='center', transform=axes[1, 1].transAxes)
-                        axes[1, 1].set_title('Analysis Summary - No Data')
-                else:
-                    axes[1, 1].text(0.5, 0.5, 'No temporal trends available', 
-                                  ha='center', va='center', transform=axes[1, 1].transAxes)
-                    axes[1, 1].set_title('Temporal Trends - No Data')
-
-            # Adjust layout and save
-            plt.tight_layout()
-            
-            if output_path:
-                plt.savefig(output_path, dpi=UHI_VISUALIZATION_DPI, bbox_inches='tight')
-                self.logger.info(f"Visualization saved to: {output_path} ({plots_created}/4 plots created)")
-            else:
-                plt.show()
-                self.logger.info(f"Visualization displayed ({plots_created}/4 plots created)")
-                
-        except Exception as e:
-            self.logger.error(f"Error creating visualization: {str(e)}")
-            # Instead of creating a fallback plot with subplots, just raise the exception
-            raise RuntimeError(f"Visualization failed: {str(e)}")
 

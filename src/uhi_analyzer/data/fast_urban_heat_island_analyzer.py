@@ -17,31 +17,15 @@ from scipy.stats import pearsonr
 from shapely.geometry import box
 import concurrent.futures
 
-from ..config.settings import (
+from uhi_analyzer.config.settings import (
     UHI_EARTH_ENGINE_PROJECT,
-    UHI_CLOUD_COVER_THRESHOLD,
-    UHI_LANDSAT_COLLECTION,
-    UHI_TEMPERATURE_BAND,
-    UHI_SCALE,
-    UHI_MAX_PIXELS,
-    UHI_TEMP_MULTIPLIER,
-    UHI_TEMP_ADDEND,
-    UHI_KELVIN_OFFSET,
-    UHI_GRID_CELL_SIZE,
-    UHI_HOTSPOT_THRESHOLD,
-    UHI_MIN_CLUSTER_SIZE,
     UHI_LOG_LEVEL,
     CRS_CONFIG,
-    CORINE_LANDUSE_MAPPING,
-    CORINE_IMPERVIOUS_COEFFICIENTS,
-    CORINE_DETAILED_TO_GROUPED,
-    CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS,
-    CORINE_GROUPED_DESCRIPTIONS,
     UHI_PERFORMANCE_MODES,
     UHI_CACHE_DIR,
     UHI_CACHE_MAX_AGE_DAYS
 )
-from ..utils.cache_manager import CacheManager
+from uhi_analyzer.utils.cache_manager import CacheManager
 
 
 class FastUrbanHeatIslandAnalyzer:
@@ -60,10 +44,10 @@ class FastUrbanHeatIslandAnalyzer:
     
     def __init__(
         self, 
-        cloud_cover_threshold: float = UHI_CLOUD_COVER_THRESHOLD,
-        grid_cell_size: float = UHI_GRID_CELL_SIZE,
-        hotspot_threshold: float = UHI_HOTSPOT_THRESHOLD,
-        min_cluster_size: int = UHI_MIN_CLUSTER_SIZE,
+        cloud_cover_threshold: float = 20,  # Maximum acceptable cloud cover percentage (0-100)
+        grid_cell_size: float = 100,  # Analysis grid cell size in meters
+        hotspot_threshold: float = 0.9,  # Percentile threshold for hotspot identification (0-1)
+        min_cluster_size: int = 5,  # Minimum number of cells for a valid hotspot cluster
         cache_dir: Union[str, Path] = UHI_CACHE_DIR,
         max_cache_age_days: int = UHI_CACHE_MAX_AGE_DAYS,
         performance_mode: Optional[str] = None,
@@ -95,12 +79,12 @@ class FastUrbanHeatIslandAnalyzer:
             # Store mode-specific settings
             self.performance_mode = performance_mode
             self.batch_size = mode_config.get('batch_size', 3000)
-            self.max_pixels = mode_config.get('max_pixels', UHI_MAX_PIXELS)
+            self.max_pixels = mode_config.get('max_pixels', 1e9)  # Maximum pixels for Earth Engine operations
             self.skip_temporal_trends = mode_config.get('skip_temporal_trends', False)
         else:
             self.performance_mode = None
             self.batch_size = 3000
-            self.max_pixels = UHI_MAX_PIXELS
+            self.max_pixels = 1e9  # Maximum pixels for Earth Engine operations
             self.skip_temporal_trends = False
         
         self.cloud_threshold = cloud_cover_threshold

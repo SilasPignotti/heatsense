@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, Union, Tuple
 import logging
 import geopandas as gpd
 
-from ..config.settings import UHI_CACHE_DIR
+from uhi_analyzer.config.settings import UHI_CACHE_DIR
 
 
 class CacheManager:

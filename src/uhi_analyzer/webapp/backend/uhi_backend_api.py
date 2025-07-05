@@ -23,28 +23,23 @@ Usage:
     result = backend.analyze(area="Kreuzberg", start_date="2023-07-01", end_date="2023-07-31")
 """
 
-import argparse
 import json
 import logging
 import sys
 import time
 from datetime import date, datetime
-from pathlib import Path
 from typing import Dict, Any, Optional, List
-import tempfile
-import uuid
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import geopandas as gpd
 
 from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
-from uhi_analyzer.utils import create_analyzer, get_analyzer_recommendation, list_performance_modes
+from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
+from uhi_analyzer.utils.analyzer_factory import create_analyzer
 from uhi_analyzer.config.settings import (
+    BERLIN_WFS_ENDPOINTS,
+    BERLIN_WFS_FEATURE_TYPES,
+    CRS_CONFIG,
     UHI_PERFORMANCE_MODES, 
-    CORINE_GROUPED_DESCRIPTIONS,
-    UHI_CACHE_DIR
 )
 
 
@@ -56,20 +51,13 @@ class UHIAnalysisBackend:
     and returns structured results suitable for web applications.
     """
     
-    def __init__(self, cache_enabled: bool = True, cache_dir: str = None, 
-                 max_cache_age_days: int = 30, log_level: str = "INFO"):
+    def __init__(self, log_level: str = "INFO"):
         """
         Initialize the UHI Analysis Backend.
         
         Args:
-            cache_enabled: Whether to enable caching for faster repeat analyses
-            cache_dir: Directory for cache files
-            max_cache_age_days: Maximum age for cached items in days
             log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         """
-        self.cache_enabled = cache_enabled
-        self.cache_dir = cache_dir or str(UHI_CACHE_DIR)
-        self.max_cache_age_days = max_cache_age_days
         self.logger = self._setup_logging(log_level)
         self.performance_modes = UHI_PERFORMANCE_MODES
         
@@ -86,127 +74,10 @@ class UHIAnalysisBackend:
             
         return logger
     
-    def validate_inputs(self, area: str, start_date: str, end_date: str, 
-                       performance_mode: str = "standard") -> Dict[str, Any]:
-        """
-        Validate user inputs and return validation result.
-        
-        Args:
-            area: Area name (Berlin suburb/locality)
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
-            performance_mode: Performance mode (preview, fast, standard, detailed)
-            
-        Returns:
-            Dict with validation results and parsed values
-        """
-        result = {
-            "valid": False,
-            "errors": [],
-            "warnings": [],
-            "parsed_values": {}
-        }
-        
-        # Validate area
-        if not area or len(area.strip()) < 2:
-            result["errors"].append("Area name must be at least 2 characters")
-        else:
-            result["parsed_values"]["area"] = area.strip()
-        
-        # Validate dates
-        try:
-            start = datetime.strptime(start_date, "%Y-%m-%d").date()
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
-            
-            if start > end:
-                result["errors"].append("Start date must be before or equal to end date")
-            elif start.year < 1990:
-                result["errors"].append("Start date must be after 1990 (satellite data availability)")
-            elif end > date.today():
-                result["errors"].append("End date cannot be in the future")
-            else:
-                result["parsed_values"]["start_date"] = start
-                result["parsed_values"]["end_date"] = end
-                
-                # Check date range length
-                date_diff = (end - start).days
-                if date_diff > 365:
-                    result["warnings"].append(f"Long date range ({date_diff} days) may increase processing time")
-                elif date_diff < 7:
-                    result["warnings"].append(f"Short date range ({date_diff} days) may limit satellite data availability")
-                    
-        except ValueError:
-            result["errors"].append("Invalid date format. Use YYYY-MM-DD")
-        
-        # Validate performance mode
-        if performance_mode not in self.performance_modes:
-            result["errors"].append(f"Invalid performance mode. Choose from: {list(self.performance_modes.keys())}")
-        else:
-            result["parsed_values"]["performance_mode"] = performance_mode
-        
-        result["valid"] = len(result["errors"]) == 0
-        return result
-    
-    def get_performance_modes(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Get available performance modes with descriptions.
-        
-        Returns:
-            Dict of performance modes with their settings and descriptions
-        """
-        # Use the new utility function for consistent mode information
-        modes_info = list_performance_modes()
-        
-        # Add backend-specific information
-        modes = {}
-        for mode_name, info in modes_info.items():
-            modes[mode_name] = {
-                "settings": self.performance_modes[mode_name],
-                "grid_size_m": info["grid_size_m"],
-                "uses_fast_analyzer": info["uses_fast_analyzer"],
-                "skips_temporal": info["skips_temporal"],
-                "description": self._get_mode_description(mode_name),
-                "recommended_for": info["recommended_for"]
-            }
-        return modes
-    
-    def _get_mode_description(self, mode: str) -> str:
-        """Get description for performance mode."""
-        descriptions = {
-            "preview": "Fast preview with lower resolution - ideal for quick exploration",
-            "fast": "Balanced speed and quality - good for interactive applications",
-            "standard": "Standard quality analysis - recommended for most use cases",
-            "detailed": "High-quality detailed analysis - best for scientific studies"
-        }
-        return descriptions.get(mode, "Standard analysis mode")
-    
-    def _get_mode_use_cases(self, mode: str) -> List[str]:
-        """Get recommended use cases for performance mode."""
-        use_cases = {
-            "preview": ["webapp initial load", "area exploration", "parameter testing"],
-            "fast": ["interactive analysis", "real-time updates", "mobile applications"],
-            "standard": ["urban planning", "research projects", "detailed reporting"],
-            "detailed": ["scientific publications", "high-precision studies", "policy making"]
-        }
-        return use_cases.get(mode, ["general analysis"])
-    
-    def get_recommended_mode(self, area_km2: float) -> str:
-        """
-        Get recommended performance mode based on analysis area size.
-        
-        Args:
-            area_km2: Analysis area in square kilometers
-            
-        Returns:
-            Recommended performance mode
-        """
-        return get_analyzer_recommendation(area_km2)
+
     
     def analyze(self, area: str, start_date: str, end_date: str, 
-                performance_mode: str = "standard", 
-                include_weather: bool = False,
-                cloud_threshold: Optional[int] = None,
-                output_formats: List[str] = None) -> Dict[str, Any]:
+                performance_mode: str = "standard") -> Dict[str, Any]:
         """
         Perform UHI analysis with given parameters.
         
@@ -217,22 +88,24 @@ class UHIAnalysisBackend:
             performance_mode: Performance mode (preview, fast, standard, detailed)
             include_weather: Whether to include weather station data
             cloud_threshold: Cloud cover threshold (0-100), None for mode default
-            output_formats: List of output formats ["json", "geojson", "png"]
             
         Returns:
             Dict with analysis results, metadata, and status
         """
-        analysis_id = str(uuid.uuid4())[:8]
         start_time = time.time()
         
-        self.logger.info(f"🔥 Starting UHI Analysis {analysis_id}")
+        self.logger.info(f"🔥 Starting UHI Analysis")
         self.logger.info(f"   Area: {area}")
         self.logger.info(f"   Period: {start_date} to {end_date}")
         self.logger.info(f"   Mode: {performance_mode}")
         
+        if performance_mode == "detailed":
+            include_weather = True
+        else:
+            include_weather = False
+
         # Initialize result structure
         result = {
-            "analysis_id": analysis_id,
             "status": "in_progress",
             "progress": 0,
             "metadata": {
@@ -251,28 +124,18 @@ class UHIAnalysisBackend:
         }
         
         try:
-            # Step 1: Validate inputs
-            self.logger.info("📋 Step 1/6: Validating inputs...")
-            validation = self.validate_inputs(area, start_date, end_date, performance_mode)
+            # Step 1: Parse inputs
+            self.logger.info("📋 Step 1/6: Parsing inputs...")
+            start_date_parsed = datetime.strptime(start_date, "%Y-%m-%d").date()
+            end_date_parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
             result["progress"] = 10
-            
-            if not validation["valid"]:
-                result["status"] = "error"
-                result["errors"] = validation["errors"]
-                result["execution_time"] = time.time() - start_time
-                return result
-            
-            if validation["warnings"]:
-                result["warnings"].extend(validation["warnings"])
-            
-            parsed = validation["parsed_values"]
             
             # Step 2: Download boundary data
             self.logger.info("🗺️  Step 2/6: Downloading boundary data...")
-            boundary_file = self._download_boundary_data(parsed["area"], analysis_id)
+            boundary_data = self._download_boundary_data(area)
             result["progress"] = 25
             
-            if not boundary_file:
+            if boundary_data is None or boundary_data.empty:
                 result["status"] = "error"
                 result["errors"].append("Failed to download boundary data")
                 result["execution_time"] = time.time() - start_time
@@ -280,35 +143,43 @@ class UHIAnalysisBackend:
             
             # Step 3: Download land cover data
             self.logger.info("🌱 Step 3/6: Downloading land cover data...")
-            landcover_file = self._download_landcover_data(
-                boundary_file, parsed["start_date"], parsed["end_date"], analysis_id
+            landcover_data = self._download_landcover_data(
+                boundary_data, start_date_parsed, end_date_parsed
             )
             result["progress"] = 40
             
-            if not landcover_file:
+            if landcover_data is None or landcover_data.empty:
                 result["status"] = "error"
                 result["errors"].append("Failed to download land cover data")
                 result["execution_time"] = time.time() - start_time
                 return result
             
-            # Step 4: Configure analyzer
-            self.logger.info("⚙️  Step 4/6: Configuring analyzer...")
-            analyzer = self._create_analyzer(performance_mode, cloud_threshold)
-            result["progress"] = 50
+            # Step 4: Download weather data
+            weather_stations = None
+            if include_weather:
+                self.logger.info("🌤️  Step 4/6: Downloading weather data...")
+                weather_stations = self._download_weather_data(
+                    boundary_data, start_date_parsed, end_date_parsed
+                )
             
-            # Step 5: Run analysis
-            self.logger.info("🔥 Step 5/6: Running UHI analysis...")
+            # Step 5: Configure analyzer
+            self.logger.info("⚙️  Step 5/6: Configuring analyzer...")
+            analyzer = self._create_analyzer(performance_mode)
+            result["progress"] = 60
+            
+            # Step 6: Run analysis
+            self.logger.info("🔥 Step 6/6: Running UHI analysis...")
             analysis_results = analyzer.analyze_heat_islands(
-                city_boundary=str(boundary_file),
-                date_range=(parsed["start_date"], parsed["end_date"]),
-                landuse_data=str(landcover_file),
-                save_intermediate=False
+                city_boundary=boundary_data,
+                date_range=(start_date_parsed, end_date_parsed),
+                landuse_data=landcover_data,
+                weather_stations=weather_stations
             )
             result["progress"] = 80
             
-            # Step 6: Process results
-            self.logger.info("📊 Step 6/6: Processing results...")
-            result["data"] = self._process_analysis_results(analysis_results, output_formats or ["json"])
+            # Process results
+            self.logger.info("📊 Processing results...")
+            result["data"] = self._process_analysis_results(analysis_results, ["json"])
             result["progress"] = 100
             result["status"] = "completed"
             
@@ -319,133 +190,166 @@ class UHIAnalysisBackend:
                 analysis_results, execution_time, performance_mode
             )
             
-            self.logger.info(f"✅ Analysis {analysis_id} completed in {execution_time:.1f}s")
+            self.logger.info(f"✅ Analysis completed in {execution_time:.1f}s")
             
         except Exception as e:
-            self.logger.error(f"❌ Analysis {analysis_id} failed: {str(e)}")
+            self.logger.error(f"❌ Analysis failed: {str(e)}")
             result["status"] = "error"
             result["errors"].append(f"Analysis failed: {str(e)}")
             result["execution_time"] = time.time() - start_time
         
-        finally:
-            # Cleanup temporary files
-            self._cleanup_temp_files(analysis_id)
         
         return result
     
-    def _download_boundary_data(self, area: str, analysis_id: str) -> Optional[Path]:
-        """Download boundary data for the specified area."""
+    def _get_boundary_type(self, area: str) -> str:
+        """
+        Determine boundary type based on area name.
+        
+        Returns:
+            str: One of 'locality_boundary', 'district_boundary', 'state_boundary'
+        """
+        # Simple heuristic - in practice you might want more sophisticated logic
+        area_lower = area.lower()
+        
+        # Check for district names (Bezirke)
+        berlin_districts = [
+            'mitte', 'friedrichshain-kreuzberg', 'pankow', 'charlottenburg-wilmersdorf',
+            'spandau', 'steglitz-zehlendorf', 'tempelhof-schöneberg', 'neukölln',
+            'treptow-köpenick', 'marzahn-hellersdorf', 'lichtenberg', 'reinickendorf'
+        ]
+        
+        if any(district in area_lower for district in berlin_districts):
+            return "district_boundary"
+        
+        # Check for state-level requests (Berlin, Brandenburg)
+        if area_lower in ['berlin']:
+            return "state_boundary"
+        
+        # Default to locality (Ortsteil)
+        return "locality_boundary"
+
+    def _download_boundary_data(self, area: str) -> Optional[gpd.GeoDataFrame]:
+        """Download boundary data for the specified area and return as GeoDataFrame."""
         try:
-            temp_dir = Path(tempfile.gettempdir()) / f"uhi_analysis_{analysis_id}"
-            temp_dir.mkdir(exist_ok=True)
+            # Determine the appropriate boundary type
+            boundary_type = self._get_boundary_type(area)
             
-            # Download Berlin localities
-            wfs_downloader = WFSDataDownloader()
+            # Get endpoint URL and feature type from settings
+            endpoint_url = BERLIN_WFS_ENDPOINTS[boundary_type]
+            feature_type = BERLIN_WFS_FEATURE_TYPES[boundary_type]
+            target_crs = CRS_CONFIG["OUTPUT"]
             
-            # Download all localities
-            all_localities_file = temp_dir / "berlin_localities.geojson"
-            success = wfs_downloader.download_and_save(
-                endpoint_name="berlin_locality_boundary",
-                output_path=all_localities_file,
-                output_format="geojson"
+            # Use simplified WFS downloader with direct URL
+            wfs_downloader = WFSDataDownloader(
+                endpoint_url=endpoint_url,
+                verbose=False  # Silent mode for backend
             )
             
-            if not success:
+            # Download all boundaries directly to memory
+            boundaries_gdf = wfs_downloader.download_to_geodataframe(
+                type_name=feature_type,
+                target_crs=target_crs
+            )
+            
+            if boundaries_gdf.empty:
+                self.logger.error(f"No {boundary_type} data downloaded")
                 return None
             
-            # Filter for specific area
-            import geopandas as gpd
-            localities_gdf = gpd.read_file(all_localities_file)
-            
-            # Find matching localities (try different column names)
-            name_columns = ['nam', 'name', 'NAME', 'bezeich', 'ortsteil', 'ORTSTEIL']
+            # Find matching areas (try different column names)
+            name_columns = ['nam', 'name', 'NAME', 'bezeich', 'ortsteil', 'ORTSTEIL', 'bezirk', 'BEZIRK']
             matching_column = None
             
             for col in name_columns:
-                if col in localities_gdf.columns:
+                if col in boundaries_gdf.columns:
                     matching_column = col
                     break
             
             if not matching_column:
-                self.logger.warning("Could not find name column, using all localities")
-                return all_localities_file
+                self.logger.warning(f"Could not find name column in {boundary_type}, using all boundaries")
+                return boundaries_gdf
             
             # Filter for the specific area
-            area_mask = localities_gdf[matching_column].str.contains(area, case=False, na=False)
-            area_gdf = localities_gdf[area_mask]
+            area_mask = boundaries_gdf[matching_column].str.contains(area, case=False, na=False)
+            area_gdf = boundaries_gdf[area_mask]
             
             if len(area_gdf) == 0:
-                self.logger.warning(f"Area '{area}' not found, using all localities")
-                return all_localities_file
+                self.logger.warning(f"Area '{area}' not found in {boundary_type}, using all boundaries")
+                return boundaries_gdf
             
-            # Save filtered boundary
-            boundary_file = temp_dir / f"{area.lower().replace(' ', '_')}_boundary.geojson"
-            area_gdf.to_file(boundary_file, driver="GeoJSON")
-            
-            return boundary_file
+            self.logger.info(f"Found {len(area_gdf)} boundaries matching '{area}' in {boundary_type}")
+            return area_gdf
             
         except Exception as e:
             self.logger.error(f"Error downloading boundary data: {e}")
             return None
     
-    def _download_landcover_data(self, boundary_file: Path, start_date: date, 
-                                end_date: date, analysis_id: str) -> Optional[Path]:
-        """Download land cover data for the boundary area."""
+    def _download_landcover_data(self, boundary_data: gpd.GeoDataFrame, start_date: date, 
+                                end_date: date) -> Optional[gpd.GeoDataFrame]:
+        """Download land cover data for the boundary area and return as GeoDataFrame."""
         try:
-            temp_dir = boundary_file.parent
-            
-            # Load boundary and process Corine data
-            
-            # Download Corine data
+            # Convert dates to datetime for the Corine downloader
             from datetime import datetime
             start_datetime = datetime.combine(start_date, datetime.min.time())
             end_datetime = datetime.combine(end_date, datetime.max.time())
             
+            # Use simplified Corine downloader with date range
             corine_downloader = CorineDataDownloader(
                 year_or_period=(start_datetime, end_datetime),
-                logger=self.logger
+                verbose=False  # Silent mode for backend
             )
             
-            # Save processed landcover data
-            landcover_file = temp_dir / f"landcover_{corine_downloader.selected_year}.geojson"
+            # Download data directly to memory
+            landcover_gdf = corine_downloader.download_for_area(boundary_data, target_crs=CRS_CONFIG["OUTPUT"])
             
-            landcover_path = corine_downloader.download_and_save(
-                geometry_input=boundary_file,
-                output_path=landcover_file,
-                output_format="geojson",
-                clip_to_boundary=True,
-                process_for_uhi=True
-            )
-            
-            if landcover_path is None:
+            if landcover_gdf.empty:
+                self.logger.error("No land cover data downloaded")
                 return None
             
-            return landcover_path
+            self.logger.info(f"Downloaded {len(landcover_gdf)} land cover features")
+            return landcover_gdf
             
         except Exception as e:
             self.logger.error(f"Error downloading landcover data: {e}")
             return None
     
-    def _create_analyzer(self, performance_mode: str, cloud_threshold: Optional[int]):
+    def _download_weather_data(self, boundary_data: gpd.GeoDataFrame, start_date: date, 
+                               end_date: date) -> Optional[gpd.GeoDataFrame]:
+        """Download weather station data for the boundary area and return as GeoDataFrame."""
+        try:
+            # Convert dates to datetime for the DWD downloader
+            from datetime import datetime
+            start_datetime = datetime.combine(start_date, datetime.min.time())
+            end_datetime = datetime.combine(end_date, datetime.max.time())
+            
+            # Use DWD downloader with reasonable defaults for backend
+            dwd_downloader = DWDDataDownloader(
+                verbose=False  # Silent mode for backend
+            )
+            
+            # Download weather data for the area
+            weather_gdf = dwd_downloader.download_for_area(
+                geometry=boundary_data,
+                start_date=start_datetime,
+                end_date=end_datetime,
+            )
+            
+            if weather_gdf.empty:
+                self.logger.warning("No weather station data downloaded")
+                return None
+            
+            self.logger.info(f"Downloaded {len(weather_gdf)} weather station records")
+            return weather_gdf
+            
+        except Exception as e:
+            self.logger.error(f"Error downloading weather data: {e}")
+            return None
+    
+    def _create_analyzer(self, performance_mode: str):
         """Create optimized analyzer using the new factory approach."""
-        # Prepare kwargs for analyzer creation
-        kwargs = {"logger": self.logger}
-        
-        # Add cache settings if enabled
-        if self.cache_enabled:
-            kwargs.update({
-                "cache_dir": self.cache_dir,
-                "max_cache_age_days": self.max_cache_age_days
-            })
-        
-        # Override cloud threshold if specified (after performance mode is applied)
-        if cloud_threshold is not None:
-            kwargs["cloud_cover_threshold"] = cloud_threshold
-        
+
         # Use the new factory approach for smart analyzer selection
         analyzer = create_analyzer(
-            performance_mode=performance_mode,
-            **kwargs
+            performance_mode=performance_mode
         )
         
         analyzer_type = type(analyzer).__name__
@@ -502,14 +406,16 @@ class UHIAnalysisBackend:
                     "geojson": json.loads(hotspots.to_json())
                 }
         
-        # Process land use correlations
+        # Process land use correlations with updated structure
         if "land_use_correlation" in analysis_results:
             landuse = analysis_results["land_use_correlation"]
-            if landuse and "correlations" in landuse:
+            if landuse:
                 processed["landuse_correlation"] = {
-                    "overall": landuse["correlations"].get("overall", {}),
-                    "by_category": landuse["correlations"].get("by_category", {}),
-                    "descriptions": CORINE_GROUPED_DESCRIPTIONS
+                    "statistics": landuse.get("statistics", {}),
+                    "correlations": landuse.get("correlations", {}),
+                    "category_descriptions": landuse.get("category_descriptions", {}),
+                    "analysis_type": landuse.get("analysis_type", "grouped"),
+                    "summary": landuse.get("summary", {})
                 }
         
         # Process recommendations
@@ -530,7 +436,7 @@ class UHIAnalysisBackend:
             "analysis_type": "Urban Heat Island Analysis",
             "temperature_overview": processed["temperature_data"].get("statistics", {}),
             "hotspots_count": processed["hotspots"].get("count", 0),
-            "correlation_strength": processed["landuse_correlation"].get("overall", {}).get("correlation", 0),
+            "correlation_strength": processed["landuse_correlation"].get("correlations", {}).get("overall", {}).get("correlation", 0),
             "recommendations_count": (
                 len(processed["recommendations"].get("strategies", [])) 
                 if isinstance(processed["recommendations"], dict) 
@@ -556,101 +462,88 @@ class UHIAnalysisBackend:
                 "weather_stations": False,  # TODO: implement weather station logic
                 "land_cover": True
             },
-            "cache_enabled": self.cache_enabled,
-            "cache_stats": metadata.get("cache_stats", {})
+            "cache_enabled": False,
+            "cache_stats": {}
         }
-    
-    def _cleanup_temp_files(self, analysis_id: str):
-        """Clean up temporary files after analysis."""
-        try:
-            temp_dir = Path(tempfile.gettempdir()) / f"uhi_analysis_{analysis_id}"
-            if temp_dir.exists():
-                import shutil
-                shutil.rmtree(temp_dir)
-                self.logger.debug(f"Cleaned up temporary files: {temp_dir}")
-        except Exception as e:
-            self.logger.warning(f"Could not clean up temporary files: {e}")
 
 
 def main():
-    """Command line interface for the UHI Analysis Backend."""
-    parser = argparse.ArgumentParser(
-        description="Urban Heat Island Analysis Backend",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s --area "Kreuzberg" --start-date 2023-07-01 --end-date 2023-07-31
-  %(prog)s --area "Mitte" --start-date 2023-06-01 --end-date 2023-08-31 --mode fast
-  %(prog)s --area "Charlottenburg" --start-date 2023-07-15 --end-date 2023-07-20 --mode preview --output result.json
-        """
-    )
+    """Simple test function for UHI Analysis Backend development."""
+    print("🔥 UHI Analysis Backend - Development Mode")
+    print("="*50)
     
-    parser.add_argument("--area", required=True,
-                       help="Berlin area/suburb name (e.g., 'Kreuzberg', 'Mitte')")
-    parser.add_argument("--start-date", required=True,
-                       help="Analysis start date (YYYY-MM-DD)")
-    parser.add_argument("--end-date", required=True,
-                       help="Analysis end date (YYYY-MM-DD)")
-    parser.add_argument("--mode", default="standard",
-                       choices=["preview", "fast", "standard", "detailed"],
-                       help="Performance mode (default: standard)")
-    parser.add_argument("--cloud-threshold", type=int,
-                       help="Cloud cover threshold 0-100 (default: mode-specific)")
-    parser.add_argument("--include-weather", action="store_true",
-                       help="Include weather station data (slower)")
-    parser.add_argument("--output", type=str,
-                       help="Output file path for results (JSON format)")
-    parser.add_argument("--formats", nargs="+", default=["json"],
-                       choices=["json", "geojson", "png"],
-                       help="Output formats (default: json)")
-    parser.add_argument("--log-level", default="INFO",
-                       choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                       help="Logging level (default: INFO)")
+    # Predefined test inputs for frontend development
+    test_scenarios = [
+        {
+            "name": "Kreuzberg Summer Analysis",
+            "area": "Kreuzberg",
+            "start_date": "2023-07-01",
+            "end_date": "2023-07-31",
+            "performance_mode": "fast"
+        },
+        {
+            "name": "Mitte Quick Preview",
+            "area": "Mitte", 
+            "start_date": "2023-07-15",
+            "end_date": "2023-07-20",
+            "performance_mode": "preview"
+        },
+        {
+            "name": "Berlin District Analysis",
+            "area": "Charlottenburg-Wilmersdorf",
+            "start_date": "2023-06-01", 
+            "end_date": "2023-08-31",
+            "performance_mode": "standard"
+        }
+    ]
     
-    args = parser.parse_args()
+    # Run the first scenario by default
+    selected_scenario = test_scenarios[0]
+    
+    print(f"Running: {selected_scenario['name']}")
+    print(f"Area: {selected_scenario['area']}")
+    print(f"Period: {selected_scenario['start_date']} to {selected_scenario['end_date']}")
+    print(f"Mode: {selected_scenario['performance_mode']}")
+    print("-" * 50)
     
     # Initialize backend
-    backend = UHIAnalysisBackend(log_level=args.log_level)
+    backend = UHIAnalysisBackend(log_level="INFO")
     
     # Run analysis
     result = backend.analyze(
-        area=args.area,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        performance_mode=args.mode,
-        include_weather=args.include_weather,
-        cloud_threshold=args.cloud_threshold,
-        output_formats=args.formats
+        area=selected_scenario["area"],
+        start_date=selected_scenario["start_date"],
+        end_date=selected_scenario["end_date"],
+        performance_mode=selected_scenario["performance_mode"]
     )
     
-    # Output results
-    if args.output:
-        with open(args.output, 'w') as f:
-            json.dump(result, f, indent=2, default=str)
-        print(f"📄 Results saved to: {args.output}")
+    # Print summary
+    print("\n" + "="*60)
+    print("🔥 UHI ANALYSIS RESULTS")
+    print("="*60)
+    
+    if result["status"] == "completed":
+        summary = result["data"]["summary"]
+        print(f"✅ Status: {result['status'].upper()}")
+        print(f"⏱️  Execution time: {result['execution_time']:.1f}s")
+        print(f"🌡️  Mean temperature: {summary['temperature_overview'].get('mean', 'N/A')}°C")
+        print(f"🔥 Hotspots found: {summary['hotspots_count']}")
+        print(f"📊 Correlation strength: {summary['correlation_strength']:.3f}")
+        print(f"💡 Recommendations: {summary['recommendations_count']}")
     else:
-        # Print summary to console
-        print("\n" + "="*60)
-        print("🔥 UHI ANALYSIS RESULTS")
-        print("="*60)
-        
-        if result["status"] == "completed":
-            summary = result["data"]["summary"]
-            print(f"✅ Status: {result['status'].upper()}")
-            print(f"⏱️  Execution time: {result['execution_time']:.1f}s")
-            print(f"🌡️  Mean temperature: {summary['temperature_overview'].get('mean', 'N/A')}°C")
-            print(f"🔥 Hotspots found: {summary['hotspots_count']}")
-            print(f"📊 Correlation strength: {summary['correlation_strength']:.3f}")
-            print(f"💡 Recommendations: {summary['recommendations_count']}")
-        else:
-            print(f"❌ Status: {result['status'].upper()}")
-            for error in result["errors"]:
-                print(f"   Error: {error}")
-        
-        print("\n📋 Full results available in JSON format")
-        
-        # Output JSON for programmatic access
-        print("\n" + json.dumps(result, indent=2, default=str))
+        print(f"❌ Status: {result['status'].upper()}")
+        for error in result["errors"]:
+            print(f"   Error: {error}")
+    
+    print(f"\n📋 Full JSON result has {len(str(result))} characters")
+    
+    # Save result for frontend development
+    output_file = "backend_test_result.json"
+    with open(output_file, 'w') as f:
+        json.dump(result, f, indent=2, default=str)
+    print(f"📄 Results saved to: {output_file}")
+    
+    return result
 
 
 if __name__ == "__main__":

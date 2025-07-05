@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-DWD Weather Data Downloader - Flexible downloader for German weather station data.
+DWD Weather Data Downloader - Simple downloader for German weather station data.
+
+Simplified downloader with minimal configuration and direct data return.
 """
 
 import logging
 from datetime import datetime
-from typing import Union, Dict, Any, Optional, Literal
-from pathlib import Path
+from typing import Union, Dict, Any, Optional, Literal, Tuple
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point, Polygon, MultiPolygon, shape
@@ -17,97 +18,87 @@ from scipy.interpolate import griddata
 from wetterdienst import Settings
 from wetterdienst.provider.dwd.observation import DwdObservationRequest
 
-from ..config.settings import (
-    DWD_SETTINGS, DWD_TEMPERATURE_PARAMETERS,
-    DWD_BUFFER_DISTANCE, DWD_INTERPOLATION_RESOLUTION, 
-    DWD_INTERPOLATION_METHOD, DWD_INTERPOLATE_BY_DEFAULT,
-    CRS_CONFIG
-)
+from ..config.settings import CRS_CONFIG, DWD_SETTINGS, DWD_TEMPERATURE_PARAMETERS
 
 # Data processing modes
 ProcessingMode = Literal['station_data', 'interpolated', 'uhi_analysis']
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
 
 class DWDDataDownloader:
     """
-    Flexible downloader for German Weather Service (DWD) data.
-    
-    This downloader retrieves and processes weather station data with options for:
-    - Basic station data retrieval
-    - Temperature interpolation on custom grids
-    - Optional UHI-specific analysis processing
+    Simple downloader for German Weather Service (DWD) data.
     
     Features:
     - Flexible geometry input: Points, Polygons, GeoJSON
     - Configurable spatial buffers and interpolation
-    - Multiple output formats and processing modes
-    - Optional UHI analysis features
+    - Multiple processing modes
+    - Direct data return (no saving functionality)
     """
     
     def __init__(
         self, 
-        buffer_distance: float = DWD_BUFFER_DISTANCE,
-        interpolation_method: str = DWD_INTERPOLATION_METHOD,
-        interpolate_by_default: bool = DWD_INTERPOLATE_BY_DEFAULT,
-        interpolation_resolution: float = DWD_INTERPOLATION_RESOLUTION,
-        logger: Optional[logging.Logger] = None
+        buffer_distance: float = 10000, # Buffer distance in meters
+        interpolation_method: str = "linear", # Interpolation method
+        interpolate_by_default: bool = True, # Perform interpolation by default
+        interpolation_resolution: float = 30, # Resolution in meters
+        log_file: Optional[str] = None,
+        verbose: bool = True
     ):
         """
-        Initializes the DWD Weather Data Downloader.
+        Initialize the DWD Weather Data Downloader.
         
         Args:
-            buffer_distance: Buffer distance in meters for station search (default from config)
+            buffer_distance: Buffer distance in meters for station search
             interpolation_method: Interpolation method ('linear', 'nearest', 'cubic')
             interpolate_by_default: Whether to interpolate by default
             interpolation_resolution: Resolution of the interpolation grid in meters
-            logger: Logger instance (optional)
+            log_file: Optional log file path
+            verbose: Enable console logging
         """
-        self.logger = logger or logging.getLogger(__name__)
-        
-        # Create wetterdienst settings with project configurations
-        settings_kwargs = {
-            "ts_shape": DWD_SETTINGS["ts_shape"],
-            "ts_humanize": DWD_SETTINGS["ts_humanize"],
-            "ts_convert_units": DWD_SETTINGS["ts_convert_units"],
-        }
-        self.settings = Settings(**settings_kwargs)
-        
-        # Set processing parameters
         self.buffer_distance = buffer_distance
         self.interpolation_method = interpolation_method
         self.interpolate_by_default = interpolate_by_default
         self.interpolation_resolution = interpolation_resolution
         
-        self.logger.info(f"DWD Downloader initialized: buffer={buffer_distance}m, method={interpolation_method}")
+        # Setup logger
+        self.logger = self._setup_logger(log_file) if verbose or log_file else None
+        
+        # Create wetterdienst settings
+        self.settings = Settings(**DWD_SETTINGS)
+        
+        if self.logger:
+            self.logger.info(f"DWD Downloader initialized: buffer={self.buffer_distance}m, method={self.interpolation_method}")
+
+    def _setup_logger(self, log_file: Optional[str] = None) -> logging.Logger:
+        """Set up simple logger."""
+        logger = logging.getLogger(f"{__name__}.DWDDataDownloader")
+        
+        if not logger.handlers:
+            logger.setLevel(logging.INFO)
+            
+            # Console handler
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+            logger.addHandler(handler)
+            
+            # File handler
+            if log_file:
+                from pathlib import Path
+                Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+                file_handler = logging.FileHandler(log_file)
+                file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s: %(message)s'))
+                logger.addHandler(file_handler)
+        
+        return logger
     
     def _create_geometry_from_geojson(self, geojson: Union[str, Dict[str, Any]]) -> Union[Point, Polygon, MultiPolygon]:
-        """
-        Creates a Shapely geometry from GeoJSON.
-        
-        Args:
-            geojson: GeoJSON as string or dictionary
-            
-        Returns:
-            Shapely geometry
-        """
+        """Create a Shapely geometry from GeoJSON."""
         if isinstance(geojson, str):
             geojson = json.loads(geojson)
-        
         return shape(geojson)
     
     def _get_bounding_box_from_geometry(self, geometry: Union[Point, Polygon, MultiPolygon]) -> Dict[str, float]:
-        """
-        Creates a bounding box from a geometry.
-        
-        Args:
-            geometry: Shapely geometry
-            
-        Returns:
-            Dictionary with min/max coordinates
-        """
+        """Create a bounding box from a geometry."""
         # Ensure the geometry is in WGS84 for lat/lon bounds
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
             geometry = geometry.to_crs(CRS_CONFIG["GEOGRAPHIC"])
@@ -124,18 +115,11 @@ class DWDDataDownloader:
     def _create_interpolation_grid(
         self, 
         geometry: Union[Point, Polygon, MultiPolygon], 
-        resolution: float = 1000
+        resolution: float = None
     ) -> gpd.GeoDataFrame:
-        """
-        Creates a regular grid for interpolation.
+        """Create a regular grid for interpolation."""
+        resolution = resolution or self.interpolation_resolution
         
-        Args:
-            geometry: Shapely geometry
-            resolution: Grid resolution in meters
-            
-        Returns:
-            GeoDataFrame with grid points
-        """
         # Convert geometry to projected CRS for metric calculations
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
             geometry = geometry.to_crs(CRS_CONFIG["PROCESSING"])
@@ -166,28 +150,22 @@ class DWDDataDownloader:
         # Back to output CRS
         grid_gdf = grid_gdf.to_crs(CRS_CONFIG["OUTPUT"])
         
-        self.logger.info(f"Interpolation grid created: {len(grid_gdf)} points with {resolution}m resolution")
+        if self.logger:
+            self.logger.info(f"Interpolation grid created: {len(grid_gdf)} points with {resolution}m resolution")
         return grid_gdf
     
     def _interpolate_temperature(
         self, 
         stations_gdf: gpd.GeoDataFrame, 
         target_gdf: gpd.GeoDataFrame,
-        method: str = 'linear'
+        method: str = None
     ) -> gpd.GeoDataFrame:
-        """
-        Interpolates temperature data from weather stations onto a grid.
+        """Interpolate temperature data from weather stations onto a grid."""
+        method = method or self.interpolation_method
         
-        Args:
-            stations_gdf: GeoDataFrame with averaged station data
-            target_gdf: GeoDataFrame with target points
-            method: Interpolation method ('linear', 'nearest', 'cubic')
-            
-        Returns:
-            GeoDataFrame with interpolated temperatures
-        """
         if len(stations_gdf) < 3:
-            self.logger.warning("Too few stations for interpolation. Using Nearest Neighbor.")
+            if self.logger:
+                self.logger.warning("Too few stations for interpolation. Using Nearest Neighbor.")
             method = 'nearest'
         
         # Convert both DataFrames to projected CRS for metric calculations
@@ -224,7 +202,8 @@ class DWDDataDownloader:
         
         # Fill NaN values with Nearest Neighbor interpolation
         if np.any(np.isnan(result_gdf['ground_temp'])):
-            self.logger.info("Filling NaN values with Nearest Neighbor interpolation")
+            if self.logger:
+                self.logger.info("Filling NaN values with Nearest Neighbor interpolation")
             nan_mask = np.isnan(result_gdf['ground_temp'])
             if np.any(nan_mask):
                 nearest_temps = griddata(
@@ -235,19 +214,12 @@ class DWDDataDownloader:
                 )
                 result_gdf.loc[nan_mask, 'ground_temp'] = nearest_temps
         
-        self.logger.info(f"Temperature interpolation completed: {len(result_gdf)} points")
+        if self.logger:
+            self.logger.info(f"Temperature interpolation completed: {len(result_gdf)} points")
         return result_gdf
     
     def _get_stations_in_area(self, geometry: Union[Point, Polygon, MultiPolygon]) -> gpd.GeoDataFrame:
-        """
-        Retrieves all weather stations in a given area.
-        
-        Args:
-            geometry: Shapely geometry
-            
-        Returns:
-            GeoDataFrame with station data
-        """
+        """Retrieve all weather stations in a given area."""
         # Convert geometry to projected CRS for buffer operation
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
             geometry_proj = geometry.to_crs(CRS_CONFIG["PROCESSING"])
@@ -256,14 +228,16 @@ class DWDDataDownloader:
         
         # Add buffer in meters
         buffered_geometry = geometry_proj.buffer(self.buffer_distance)
-        self.logger.info(f"Geometry extended with {self.buffer_distance}m buffer")
+        if self.logger:
+            self.logger.info(f"Geometry extended with {self.buffer_distance}m buffer")
         
         # Back to input CRS for bounding box
         buffered_geometry = gpd.GeoSeries([buffered_geometry], crs=CRS_CONFIG["PROCESSING"]).to_crs(CRS_CONFIG["GEOGRAPHIC"])[0]
         
         # Create bounding box from extended geometry
         bbox = self._get_bounding_box_from_geometry(buffered_geometry)
-        self.logger.info(f"Bounding box: {bbox}")
+        if self.logger:
+            self.logger.info(f"Bounding box: {bbox}")
         
         # Create request for hourly temperature data
         request = DwdObservationRequest(
@@ -277,7 +251,8 @@ class DWDDataDownloader:
         stations_df = request.all().df
         
         if stations_df.is_empty():
-            self.logger.error("No stations available!")
+            if self.logger:
+                self.logger.error("No stations available!")
             return gpd.GeoDataFrame()
         
         # Filter stations within the bounding box
@@ -289,7 +264,8 @@ class DWDDataDownloader:
         )
         
         if stations_in_bbox.is_empty():
-            self.logger.error("No stations available in the bounding box!")
+            if self.logger:
+                self.logger.error("No stations available in the bounding box!")
             return gpd.GeoDataFrame()
         
         # As GeoDataFrame with input CRS
@@ -310,18 +286,9 @@ class DWDDataDownloader:
         start_date: datetime, 
         end_date: datetime
     ) -> pd.DataFrame:
-        """
-        Retrieves temperature data for a period.
-        
-        Args:
-            station_ids: List of station IDs
-            start_date: Start date
-            end_date: End date
-            
-        Returns:
-            DataFrame with temperature data
-        """
-        self.logger.info(f"Loading temperature data for {len(station_ids)} stations from {start_date} to {end_date}")
+        """Retrieve temperature data for a period."""
+        if self.logger:
+            self.logger.info(f"Loading temperature data for {len(station_ids)} stations from {start_date} to {end_date}")
         
         # Create request for hourly temperature data
         request = DwdObservationRequest(
@@ -335,13 +302,15 @@ class DWDDataDownloader:
         temp_data = request.filter_by_station_id(station_ids).values.all().df
         
         if temp_data.is_empty():
-            self.logger.error("No temperature data available!")
+            if self.logger:
+                self.logger.error("No temperature data available!")
             return pd.DataFrame()
         
         # Convert to Pandas DataFrame
         temp_df = temp_data.to_pandas()
         
-        self.logger.info(f"Successfully loaded: {len(temp_df)} temperature measurements")
+        if self.logger:
+            self.logger.info(f"Successfully loaded: {len(temp_df)} temperature measurements")
         return temp_df
     
     def _calculate_station_averages(
@@ -349,17 +318,9 @@ class DWDDataDownloader:
         stations_gdf: gpd.GeoDataFrame,
         temp_data: pd.DataFrame
     ) -> gpd.GeoDataFrame:
-        """
-        Calculates average temperatures per station.
-        
-        Args:
-            stations_gdf: GeoDataFrame with station data
-            temp_data: DataFrame with temperature data
-            
-        Returns:
-            GeoDataFrame with averaged temperatures
-        """
-        self.logger.info("Calculating average temperatures per station")
+        """Calculate average temperatures per station."""
+        if self.logger:
+            self.logger.info("Calculating average temperatures per station")
         
         if temp_data.empty:
             return gpd.GeoDataFrame()
@@ -383,100 +344,40 @@ class DWDDataDownloader:
         stations_with_temp['period_start'] = temp_data['date'].min()
         stations_with_temp['period_end'] = temp_data['date'].max()
         
-        self.logger.info(f"Average temperatures calculated for {len(stations_with_temp)} stations")
-        
-        # Output statistics
-        for _, station in stations_with_temp.iterrows():
-            self.logger.info(
-                f"Station {station['station_id']} ({station['name']}): "
-                f"Ø {station['ground_temp']:.1f}°C "
-                f"({station['measurement_count']} measurements, "
-                f"σ={station['temp_std']:.1f}°C)"
-            )
+        if self.logger:
+            self.logger.info(f"Average temperatures calculated for {len(stations_with_temp)} stations")
+            
+            # Output statistics
+            for _, station in stations_with_temp.iterrows():
+                self.logger.info(
+                    f"Station {station['station_id']} ({station['name']}): "
+                    f"Ø {station['ground_temp']:.1f}°C "
+                    f"({station['measurement_count']} measurements, "
+                    f"σ={station['temp_std']:.1f}°C)"
+                )
         
         return stations_with_temp
 
-    def process_for_uhi_analysis(self, weather_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        """
-        Processes weather data specifically for Urban Heat Island analysis.
-        
-        This method adds UHI-specific columns and calculations:
-        - temperature_category: Categorical temperature classification
-        - heat_stress_potential: Heat stress indicator based on temperature thresholds
-        - measurement_quality: Quality indicator based on station count and std deviation
-        
-        Args:
-            weather_data: GeoDataFrame with temperature data
-            
-        Returns:
-            GeoDataFrame with UHI-specific columns added
-        """
-        if weather_data.empty:
-            return weather_data
-        
-        result_gdf = weather_data.copy()
-        
-        # Add temperature categories for UHI analysis
-        if 'ground_temp' in result_gdf.columns:
-            result_gdf['temperature_category'] = pd.cut(
-                result_gdf['ground_temp'],
-                bins=[-np.inf, 0, 10, 20, 30, np.inf],
-                labels=['very_cold', 'cold', 'moderate', 'warm', 'hot']
-            )
-            
-            # Heat stress potential (relevant for UHI studies)
-            result_gdf['heat_stress_potential'] = pd.cut(
-                result_gdf['ground_temp'],
-                bins=[-np.inf, 15, 25, 30, 35, np.inf],
-                labels=['low', 'moderate', 'high', 'very_high', 'extreme']
-            )
-        
-        # Add measurement quality indicator - always add for UHI analysis
-        result_gdf['measurement_quality'] = 'unknown'
-        
-        if 'temp_std' in result_gdf.columns and 'measurement_count' in result_gdf.columns:
-            # Quality based on measurement count and low standard deviation
-            result_gdf.loc[
-                (result_gdf['measurement_count'] >= 100) & (result_gdf['temp_std'] <= 5), 
-                'measurement_quality'
-            ] = 'high'
-            result_gdf.loc[
-                (result_gdf['measurement_count'] >= 50) & (result_gdf['temp_std'] <= 8), 
-                'measurement_quality'
-            ] = 'medium'
-            result_gdf.loc[
-                result_gdf['measurement_quality'] == 'unknown', 
-                'measurement_quality'
-            ] = 'low'
-        else:
-            # Default quality for interpolated data or data without quality indicators
-            result_gdf['measurement_quality'] = 'medium'
-        
-        # Add grid ID for interpolated data (useful for UHI spatial analysis)
-        if 'source' in result_gdf.columns and 'interpolated' in result_gdf['source'].values:
-            result_gdf['grid_id'] = range(len(result_gdf))
-        
-        self.logger.info("UHI-specific processing completed")
-        return result_gdf
+
     
-    def get_weather_data(
+    def download_for_area(
         self,
         geometry: Union[Point, Polygon, MultiPolygon, str, Dict[str, Any], gpd.GeoDataFrame],
         start_date: datetime,
         end_date: datetime,
-        interpolate: bool = None,
+        interpolate: bool = True,
         resolution: float = None,
         processing_mode: ProcessingMode = 'station_data'
     ) -> gpd.GeoDataFrame:
         """
-        Retrieves weather data for a geometry and time period.
+        Download weather data for a geometry and time period.
         
         Args:
             geometry: Geometry as Shapely object, GeoJSON string/dict, or GeoDataFrame
             start_date: Start date
             end_date: End date
             interpolate: Whether to interpolate (default from config)
-            resolution: Resolution of the interpolation grid in meters (default from config)
+            resolution: Resolution of the interpolation grid in meters
             processing_mode: Processing mode ('station_data', 'interpolated', 'uhi_analysis')
             
         Returns:
@@ -484,7 +385,7 @@ class DWDDataDownloader:
         """
         # Parameter defaults
         interpolate = self.interpolate_by_default if interpolate is None else interpolate
-        resolution = self.interpolation_resolution if resolution is None else resolution
+        resolution = resolution or self.interpolation_resolution
         
         # Adjust interpolate flag based on processing mode
         if processing_mode == 'interpolated':
@@ -492,8 +393,9 @@ class DWDDataDownloader:
         elif processing_mode == 'station_data':
             interpolate = False
         
-        self.logger.info(f"Loading weather data for period {start_date} to {end_date}")
-        self.logger.info(f"Buffer: {self.buffer_distance}m, Resolution: {resolution}m, Mode: {processing_mode}")
+        if self.logger:
+            self.logger.info(f"Loading weather data for period {start_date} to {end_date}")
+            self.logger.info(f"Buffer: {self.buffer_distance}m, Resolution: {resolution}m, Mode: {processing_mode}")
         
         # Create geometry from input
         if isinstance(geometry, gpd.GeoDataFrame):
@@ -524,17 +426,20 @@ class DWDDataDownloader:
         if stations_with_temp.empty:
             return gpd.GeoDataFrame()
         
-        self.logger.info(f"Found {len(stations_with_temp)} stations with temperature data")
+        if self.logger:
+            self.logger.info(f"Found {len(stations_with_temp)} stations with temperature data")
         
         # Perform interpolation if requested
         if interpolate:
-            self.logger.info("Starting temperature interpolation...")
+            if self.logger:
+                self.logger.info("Starting temperature interpolation...")
             
             # Create interpolation grid
             grid_gdf = self._create_interpolation_grid(geometry, resolution)
             
             if grid_gdf.empty:
-                self.logger.warning("No grid points created for interpolation")
+                if self.logger:
+                    self.logger.warning("No grid points created for interpolation")
                 result_gdf = stations_with_temp
             else:
                 # Interpolate temperatures
@@ -551,103 +456,37 @@ class DWDDataDownloader:
                 result_gdf['period_start'] = stations_with_temp['period_start'].iloc[0]
                 result_gdf['period_end'] = stations_with_temp['period_end'].iloc[0]
                 
-                self.logger.info(f"Interpolation completed: {len(result_gdf)} points created")
+                if self.logger:
+                    self.logger.info(f"Interpolation completed: {len(result_gdf)} points created")
         else:
             # Return station data
             result_gdf = stations_with_temp.copy()
             result_gdf['source'] = 'station'
         
-        # Apply UHI-specific processing if requested
-        if processing_mode == 'uhi_analysis':
-            result_gdf = self.process_for_uhi_analysis(result_gdf)
         
         return result_gdf
-    
-    def download_and_save(
-        self,
-        geometry: Union[Point, Polygon, MultiPolygon, str, Dict[str, Any], gpd.GeoDataFrame],
-        start_date: datetime,
-        end_date: datetime,
-        output_path: Optional[Union[str, Path]] = None,
-        output_format: str = 'geojson',
-        interpolate: bool = None,
-        resolution: float = None,
-        processing_mode: ProcessingMode = 'station_data'
-    ) -> Path:
-        """
-        Downloads weather data and saves it to a file.
-        
-        Args:
-            geometry: Geometry specification
-            start_date: Start date
-            end_date: End date
-            output_path: Path for output file (auto-generated if None)
-            output_format: Output format ('geojson', 'gpkg', 'csv')
-            interpolate: Whether to interpolate
-            resolution: Interpolation resolution in meters
-            processing_mode: Processing mode ('station_data', 'interpolated', 'uhi_analysis')
-            
-        Returns:
-            Path to the saved file
-        """
-        # Get weather data
-        weather_data = self.get_weather_data(
-            geometry=geometry,
-            start_date=start_date,
-            end_date=end_date,
-            interpolate=interpolate,
-            resolution=resolution,
-            processing_mode=processing_mode
-        )
-        
-        if weather_data.empty:
-            raise ValueError("No weather data retrieved")
-        
-        # Generate output path if not provided
-        if output_path is None:
-            date_str = f"{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
-            mode_suffix = f"_{processing_mode}" if processing_mode != 'station_data' else ""
-            
-            if output_format == 'csv':
-                ext = '.csv'
-            elif output_format == 'gpkg':
-                ext = '.gpkg'
-            else:
-                ext = '.geojson'
-            
-            output_path = Path(f"data/processed/weather/dwd_weather_{date_str}{mode_suffix}{ext}")
-        
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Save data
-        if output_format == 'csv':
-            # For CSV, include coordinates as columns
-            weather_data_csv = weather_data.copy()
-            weather_data_csv['longitude'] = weather_data_csv.geometry.x
-            weather_data_csv['latitude'] = weather_data_csv.geometry.y
-            weather_data_csv.drop('geometry', axis=1).to_csv(output_path, index=False)
-        elif output_format == 'gpkg':
-            weather_data.to_file(output_path, driver='GPKG')
-        else:  # geojson
-            weather_data.to_file(output_path, driver='GeoJSON')
-        
-        self.logger.info(f"Weather data saved: {output_path} ({len(weather_data)} records)")
-        return output_path
 
-    @staticmethod
-    def get_default_parameters() -> Dict[str, Any]:
-        """
-        Returns default configuration parameters.
-        
-        Returns:
-            Dictionary with default parameters
-        """
-        return {
-            'buffer_distance': DWD_BUFFER_DISTANCE,
-            'interpolation_method': DWD_INTERPOLATION_METHOD,
-            'interpolate_by_default': DWD_INTERPOLATE_BY_DEFAULT,
-            'interpolation_resolution': DWD_INTERPOLATION_RESOLUTION,
-            'temperature_parameters': DWD_TEMPERATURE_PARAMETERS,
-            'settings': DWD_SETTINGS
-        } 
+
+if __name__ == "__main__":
+    # Simple usage example
+    downloader = DWDDataDownloader()
+    
+    # Create a simple test geometry (Berlin center)
+    import shapely.geometry
+    test_geom = gpd.GeoDataFrame(
+        [1], 
+        geometry=[shapely.geometry.box(13.3, 52.4, 13.5, 52.6)], 
+        crs="EPSG:4326"
+    )
+    
+    try:
+        gdf = downloader.download_for_area(
+            test_geom, 
+            datetime(2023, 7, 1), 
+            datetime(2023, 7, 31),
+            processing_mode='uhi_analysis'
+        )
+        print(f"✓ Downloaded {len(gdf)} weather records")
+        print(f"Columns: {list(gdf.columns)}")
+    except Exception as e:
+        print(f"✗ Failed: {e}") 
