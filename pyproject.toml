@@ -31,9 +31,16 @@ dependencies = [
     "ruff>=0.12.0",
     "pytest>=7.0.0",
     "python-dotenv>=1.1.0",
-    "shiny>=1.4.0",
     "plotly>=6.2.0",
     "folium>=0.20.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "streamlit",
+    "streamlit-folium",
+    "pydantic",
+    "python-multipart",
+    "flask>=2.3.0",
+    "flask-cors>=4.0.0",
 ]
 
 [tool.setuptools.packages.find]

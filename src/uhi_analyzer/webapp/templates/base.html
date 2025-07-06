@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Urban Heat Island Analyzer{% endblock %}</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Leaflet for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-fire"></i>
+                <h1>Urban Heat Island Analyzer</h1>
+            </div>
+            <div class="header-center">
+                <div class="subtitle">
+                    Interaktive Analyse und Visualisierung von städtischen Wärmeinseln
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" title="Informationen" onclick="showProjectInfo()">
+                    <i class="fas fa-info-circle"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3>Analyse wird durchgeführt...</h3>
+            <p id="loading-step">Initialisierung...</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progress-percent">0%</span>
+                <span id="progress-time">0.0s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Fehler</h3>
+                <button class="close-btn" onclick="hideError()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="error-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideError()">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-circle"></i> Erfolg</h3>
+                <button class="close-btn" onclick="hideSuccess()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="success-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="hideSuccess()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Info Modal -->
+    <div id="project-info-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Projektinformationen</h3>
+                <button class="close-btn" onclick="hideProjectInfo()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="project-info">
+                    <h4><i class="fas fa-fire"></i> Urban Heat Island Analyzer</h4>
+                    <p><strong>Version:</strong> 1.0</p>
+                    <p><strong>Entwickelt von:</strong> Silas Pignotti</p>
+                    
+                    <h5><i class="fas fa-bullseye"></i> Projektziel</h5>
+                    <p>Diese Anwendung analysiert städtische Wärmeinseln (Urban Heat Islands) in Berlin und bietet eine interaktive Visualisierung der Temperaturdaten und Landnutzungsmuster.</p>
+                    
+                    <h5><i class="fas fa-cogs"></i> Funktionen</h5>
+                    <ul>
+                        <li>Interaktive Kartenvisualisierung</li>
+                        <li>Temperaturanalyse basierend auf Satellitendaten</li>
+                        <li>Landnutzungskorrelation</li>
+                        <li>Hotspot-Identifikation</li>
+                        <li>Mitigation-Empfehlungen</li>
+                    </ul>
+                    
+                    <h5><i class="fas fa-database"></i> Datenquellen</h5>
+                    <ul>
+                        <li>Google Earth Engine - Landsat Satellitendaten</li>
+                        <li>OpenStreetMap - Gebietsgrenzen</li>
+                        <li>CORINE Land Cover - Landnutzungsdaten</li>
+                        <li>DWD - Wetterstationsdaten</li>
+                    </ul>
+                    
+                    <h5><i class="fas fa-lightbulb"></i> Inspiration</h5>
+                    <p>Der Analysealgorithmus wurde inspiriert durch:</p>
+                    <ul>
+                        <li><a href="https://medium.com/@animagun/5-open-source-gis-projects-for-urban-planning-you-can-build-this-weekend-2c820cb10f3c" target="_blank" rel="noopener noreferrer">5 Open Source GIS Projects for Urban Planning You Can Build This Weekend</a></li>
+                    </ul>
+                    
+                    <h5><i class="fas fa-code"></i> Technologie</h5>
+                    <p>Python • Flask • Leaflet • Chart.js • Google Earth Engine API</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="hideProjectInfo()">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+    
+    <!-- Initialize Application -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM loaded, initializing application...');
+            initializeApp();
+        });
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

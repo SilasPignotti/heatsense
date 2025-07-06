@@ -177,6 +177,10 @@ class UHIAnalysisBackend:
             )
             result["progress"] = 80
             
+            # Store raw data for processing
+            analysis_results["raw_weather_stations"] = weather_stations
+            analysis_results["raw_landcover_data"] = landcover_data
+            
             # Process results
             self.logger.info("📊 Processing results...")
             result["data"] = self._process_analysis_results(analysis_results, ["json"])
@@ -417,6 +421,54 @@ class UHIAnalysisBackend:
                     "analysis_type": landuse.get("analysis_type", "grouped"),
                     "summary": landuse.get("summary", {})
                 }
+                
+                # Add landuse geometry data if available
+                if "geometry" in landuse and landuse["geometry"] is not None:
+                    try:
+                        processed["landuse_correlation"]["geojson"] = json.loads(landuse["geometry"].to_json())
+                    except Exception as e:
+                        self.logger.warning(f"Failed to convert landuse geometry to GeoJSON: {e}")
+                        
+        # Process weather station data (from raw data if available)
+        if "raw_weather_stations" in analysis_results and analysis_results["raw_weather_stations"] is not None:
+            weather_stations = analysis_results["raw_weather_stations"]
+            try:
+                processed["weather_stations"] = {
+                    "count": len(weather_stations),
+                    "temperature_range": {
+                        "min": round(weather_stations['ground_temp'].min(), 2) if 'ground_temp' in weather_stations.columns else None,
+                        "max": round(weather_stations['ground_temp'].max(), 2) if 'ground_temp' in weather_stations.columns else None
+                    },
+                    "geojson": json.loads(weather_stations.to_json())
+                }
+            except Exception as e:
+                self.logger.warning(f"Failed to process weather station data: {e}")
+        elif "ground_validation" in analysis_results:
+            weather_data = analysis_results["ground_validation"]
+            if weather_data and "station_data" in weather_data:
+                station_data = weather_data["station_data"]
+                try:
+                    processed["weather_stations"] = {
+                        "count": len(station_data),
+                        "temperature_range": {
+                            "min": round(station_data['ground_temp'].min(), 2) if 'ground_temp' in station_data.columns else None,
+                            "max": round(station_data['ground_temp'].max(), 2) if 'ground_temp' in station_data.columns else None
+                        },
+                        "geojson": json.loads(station_data.to_json())
+                    }
+                except Exception as e:
+                    self.logger.warning(f"Failed to process weather station data: {e}")
+        
+        # Process landuse data (from raw data if available)
+        if "raw_landcover_data" in analysis_results and analysis_results["raw_landcover_data"] is not None:
+            landcover_data = analysis_results["raw_landcover_data"]
+            try:
+                processed["landuse_data"] = {
+                    "count": len(landcover_data),
+                    "geojson": json.loads(landcover_data.to_json())
+                }
+            except Exception as e:
+                self.logger.warning(f"Failed to process landuse data: {e}")
         
         # Process recommendations
         if "mitigation_recommendations" in analysis_results:

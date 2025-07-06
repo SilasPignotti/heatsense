@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="app-container">
+    <!-- Sidebar - Input Controls -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2><i class="fas fa-map-marker-alt"></i> Analyse-Parameter</h2>
+        </div>
+        
+        <div class="sidebar-content">
+            <form id="analysis-form">
+                <!-- Area Selection -->
+                <div class="form-group">
+                    <label>
+                        <i class="fas fa-city"></i> Gebiet
+                    </label>
+                    
+                    <!-- Area Type Selection -->
+                    <div class="area-type-buttons">
+                        <button type="button" class="area-type-btn" data-type="bundesland">
+                            <i class="fas fa-flag"></i>
+                            Bundesland
+                        </button>
+                        <button type="button" class="area-type-btn" data-type="bezirk">
+                            <i class="fas fa-map-marked-alt"></i>
+                            Bezirk
+                        </button>
+                        <button type="button" class="area-type-btn active" data-type="ortsteil">
+                            <i class="fas fa-home"></i>
+                            Ortsteil
+                        </button>
+                    </div>
+                    
+                    <!-- Area Selection Dropdown -->
+                    <select id="area-select" name="area" required>
+                        <option value="">Gebiet auswählen...</option>
+                    </select>
+                </div>
+
+                <!-- Date Range -->
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> Zeitraum</label>
+                    <div class="date-range">
+                        <div class="date-input">
+                            <label for="start-date">Von:</label>
+                            <input type="date" id="start-date" name="start_date" required>
+                        </div>
+                        <div class="date-input">
+                            <label for="end-date">Bis:</label>
+                            <input type="date" id="end-date" name="end_date" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Mode -->
+                <div class="form-group">
+                    <label><i class="fas fa-tachometer-alt"></i> Performance-Modus</label>
+                    <div class="performance-modes">
+                        <div class="mode-option">
+                            <input type="radio" id="mode-preview" name="performance_mode" value="preview">
+                            <label for="mode-preview">
+                                <div class="mode-header">
+                                    <span class="mode-name">Preview</span>
+                                    <span class="mode-duration">< 30s</span>
+                                </div>
+                                <div class="mode-description">Schnell</div>
+                            </label>
+                        </div>
+                        <div class="mode-option">
+                            <input type="radio" id="mode-fast" name="performance_mode" value="fast" checked>
+                            <label for="mode-fast">
+                                <div class="mode-header">
+                                    <span class="mode-name">Fast</span>
+                                    <span class="mode-duration">30-60s</span>
+                                </div>
+                                <div class="mode-description">Empfohlen</div>
+                            </label>
+                        </div>
+                        <div class="mode-option">
+                            <input type="radio" id="mode-standard" name="performance_mode" value="standard">
+                            <label for="mode-standard">
+                                <div class="mode-header">
+                                    <span class="mode-name">Standard</span>
+                                    <span class="mode-duration">1-3 min</span>
+                                </div>
+                                <div class="mode-description">Detailliert</div>
+                            </label>
+                        </div>
+                        <div class="mode-option">
+                            <input type="radio" id="mode-detailed" name="performance_mode" value="detailed">
+                            <label for="mode-detailed">
+                                <div class="mode-header">
+                                    <span class="mode-name">Detailed</span>
+                                    <span class="mode-duration">3-10 min</span>
+                                </div>
+                                <div class="mode-description">Vollständig</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Options -->
+                <div class="form-group">
+                    <label><i class="fas fa-cog"></i> Erweiterte Optionen</label>
+                    <div class="advanced-options">
+                        <div class="option">
+                            <input type="checkbox" id="include-weather" name="include_weather">
+                            <label for="include-weather">Wetterstationen einbeziehen</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn btn-primary btn-large">
+                    <i class="fas fa-search"></i> Analyse starten
+                </button>
+            </form>
+
+            <!-- Progress Section -->
+            <div class="progress-section hidden" id="progress-section">
+                <h3><i class="fas fa-chart-line"></i> Fortschritt</h3>
+                <div class="progress-bar-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="sidebar-progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="sidebar-progress-percent">0%</span>
+                        <span id="sidebar-progress-time">0.0s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-area">
+        <!-- Map Section -->
+        <section class="map-section">
+            <div class="map-header">
+                <h2><i class="fas fa-map"></i> Interaktive Wärmekarte</h2>
+                <div class="map-controls">
+                    <button class="btn-icon" title="Zoom In" onclick="zoomIn()">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button class="btn-icon" title="Zoom Out" onclick="zoomOut()">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <button class="btn-icon" title="Zentrieren" onclick="centerMap()">
+                        <i class="fas fa-crosshairs"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="map-container">
+                <div id="map" class="map"></div>
+                
+                <!-- Map Legend -->
+                <div class="map-legend">
+                    <h4><i class="fas fa-thermometer-half"></i> Temperaturskala</h4>
+                    <div class="temperature-scale">
+                        <div class="scale-bar"></div>
+                        <div class="scale-labels">
+                            <span>15°C</span>
+                            <span>25°C</span>
+                            <span>35°C</span>
+                            <span>45°C</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Layer Controls -->
+                <div class="layer-controls">
+                    <h4><i class="fas fa-layer-group"></i> Kartenebenen</h4>
+                    <div class="layer-options">
+                        <label class="layer-option">
+                            <input type="checkbox" id="layer-temperature" checked>
+                            <span>Temperaturdaten</span>
+                        </label>
+                        <label class="layer-option">
+                            <input type="checkbox" id="layer-landuse">
+                            <span>Landnutzung</span>
+                        </label>
+                        <label class="layer-option">
+                            <input type="checkbox" id="layer-weather">
+                            <span>Wetterstationen</span>
+                        </label>
+                        <label class="layer-option">
+                            <input type="checkbox" id="layer-hotspots">
+                            <span>Hotspots</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics Section -->
+        <section class="stats-section">
+            <div class="stats-header">
+                <h2><i class="fas fa-chart-bar"></i> Analyseergebnisse</h2>
+            </div>
+            
+            <!-- Summary Cards -->
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-thermometer-half"></i>
+                        <h3>Temperatur</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="stat-value" id="avg-temperature">--°C</div>
+                        <div class="stat-label">Durchschnitt</div>
+                        <div class="stat-details">
+                            <span>Max: <span id="max-temperature">--°C</span></span>
+                            <span>Min: <span id="min-temperature">--°C</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-fire"></i>
+                        <h3>Hotspots</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="stat-value" id="hotspots-count">--</div>
+                        <div class="stat-label">Gefunden</div>
+                        <div class="stat-details">
+                            <span>Max: <span id="hotspots-max">--°C</span></span>
+                            <span>Ø Größe: <span id="hotspots-size">--</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-seedling"></i>
+                        <h3>Landnutzung</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="stat-value" id="landuse-correlation">--</div>
+                        <div class="stat-label">Korrelation</div>
+                        <div class="stat-details">
+                            <span>Bebauung: <span id="landuse-urban">--%</span></span>
+                            <span>Grün: <span id="landuse-green">--%</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-lightbulb"></i>
+                        <h3>Empfehlungen</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="stat-value" id="recommendations-count">--</div>
+                        <div class="stat-label">Strategien</div>
+                        <div class="stat-details">
+                            <button class="btn btn-small" onclick="showRecommendations()">
+                                Details →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Charts -->
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3><i class="fas fa-chart-area"></i> Temperaturverteilung</h3>
+                    <div class="chart-container">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3><i class="fas fa-chart-scatter"></i> Landnutzung vs. Temperatur</h3>
+                    <div class="chart-container">
+                        <canvas id="correlation-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Recommendations Modal -->
+<div id="recommendations-modal" class="modal hidden">
+    <div class="modal-content large">
+        <div class="modal-header">
+            <h3><i class="fas fa-lightbulb"></i> Empfehlungen zur Hitzereduktion</h3>
+            <button class="close-btn" onclick="hideRecommendations()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="recommendations-content">
+                <!-- Recommendations will be populated here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideRecommendations()">Schließen</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- App initialization is handled in base.html -->
+{% endblock %} 

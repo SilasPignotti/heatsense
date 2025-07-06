@@ -132,9 +132,9 @@ CORINE_IMPERVIOUS_COEFFICIENTS = {
     "sea_ocean": 0.00
 }
 
-# Gruppierung der CORINE-Kategorien in 6 Hauptkategorien für UHI-Analyse
+# Grouping of CORINE categories into 6 main categories for UHI analysis
 CORINE_GROUPED_CATEGORIES = {
-    # Hochversiegelte urbane Bereiche (sehr hoher UHI-Effekt)
+    # High-density urban areas (very high UHI effect)
     "high_density_urban": [
         "urban_continuous",
         "industrial_commercial", 
@@ -143,7 +143,7 @@ CORINE_GROUPED_CATEGORIES = {
         "airports"
     ],
     
-    # Niedrigversiegelte urbane Bereiche (mittlerer UHI-Effekt)
+    # Low-density urban areas (medium UHI effect)
     "low_density_urban": [
         "urban_discontinuous",
         "mineral_extraction",
@@ -151,13 +151,13 @@ CORINE_GROUPED_CATEGORIES = {
         "construction_sites"
     ],
     
-    # Urbane Grünflächen (kühlender Effekt)
+    # Urban green areas (cooling effect)
     "urban_green": [
         "green_urban_areas",
         "sport_leisure"
     ],
     
-    # Landwirtschaftliche Flächen (neutraler bis leicht kühlender Effekt)
+    # Agricultural areas (neutral to slightly cooling effect)
     "agricultural": [
         "non_irrigated_arable",
         "irrigated_arable",
@@ -172,7 +172,7 @@ CORINE_GROUPED_CATEGORIES = {
         "agro_forestry"
     ],
     
-    # Natürliche Vegetation (starker kühlender Effekt)
+    # Natural vegetation (strong cooling effect)
     "natural_vegetation": [
         "broad_leaved_forest",
         "coniferous_forest",
@@ -183,7 +183,7 @@ CORINE_GROUPED_CATEGORIES = {
         "transitional_woodland"
     ],
     
-    # Wasserflächen und natürliche offene Bereiche (starker kühlender Effekt)
+    # Water bodies and natural open areas (strong cooling effect)
     "water_and_natural": [
         "beaches_dunes",
         "bare_rocks", 
@@ -220,14 +220,14 @@ CORINE_GROUPED_IMPERVIOUS_COEFFICIENTS = {
     "water_and_natural": 0.02       # Praktisch unversiegelt
 }
 
-# Beschreibungen der gruppierten Kategorien für Reports
+# Descriptions of grouped categories for reports
 CORINE_GROUPED_DESCRIPTIONS = {
-    "high_density_urban": "Hochversiegelte urbane Bereiche (Stadtzentren, Industrie, Verkehr)",
-    "low_density_urban": "Niedrigversiegelte urbane Bereiche (Vororte, Baustellen)",
-    "urban_green": "Urbane Grünflächen (Parks, Sportanlagen)",
-    "agricultural": "Landwirtschaftliche Flächen (Felder, Weiden, Plantagen)",
-    "natural_vegetation": "Natürliche Vegetation (Wälder, Grasland)",
-    "water_and_natural": "Wasserflächen und natürliche offene Bereiche"
+    "high_density_urban": "High-density urban areas (city centers, industry, transport)",
+    "low_density_urban": "Low-density urban areas (suburbs, construction sites)",
+    "urban_green": "Urban green areas (parks, sports facilities)",
+    "agricultural": "Agricultural areas (fields, pastures, plantations)",
+    "natural_vegetation": "Natural vegetation (forests, grasslands)",
+    "water_and_natural": "Water bodies and natural open areas"
 }
 
 def process_corine_for_uhi(
