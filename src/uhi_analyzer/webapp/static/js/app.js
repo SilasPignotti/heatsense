@@ -893,11 +893,6 @@ function showDownloadButton() {
     if (downloadButton) {
         downloadButton.style.display = 'flex';
     }
-    
-    const wfsDropdown = document.getElementById('wfs-dropdown');
-    if (wfsDropdown) {
-        wfsDropdown.style.display = 'block';
-    }
 }
 
 /**
@@ -907,11 +902,6 @@ function hideDownloadButton() {
     const downloadButton = document.getElementById('download-button');
     if (downloadButton) {
         downloadButton.style.display = 'none';
-    }
-    
-    const wfsDropdown = document.getElementById('wfs-dropdown');
-    if (wfsDropdown) {
-        wfsDropdown.style.display = 'none';
     }
 }
 
@@ -963,57 +953,9 @@ function downloadResults() {
     }
 }
 
-/**
- * Toggle WFS dropdown menu
- */
-function toggleWfsDropdown() {
-    const dropdownContent = document.getElementById('wfs-dropdown-content');
-    if (dropdownContent) {
-        dropdownContent.classList.toggle('show');
-    }
-}
 
-/**
- * Download WFS layer
- */
-async function downloadWfsLayer(layerName, format) {
-    try {
-        // Build download URL
-        const url = `/api/wfs/download/${layerName}?format=${format}`;
-        
-        // Create a temporary link and click it to trigger download
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${layerName}.${format}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Close dropdown
-        const dropdownContent = document.getElementById('wfs-dropdown-content');
-        if (dropdownContent) {
-            dropdownContent.classList.remove('show');
-        }
-        
-        showSuccessMessage(`${layerName} Layer erfolgreich heruntergeladen`);
-        
-    } catch (error) {
-        console.error('WFS download failed:', error);
-        showErrorMessage('Fehler beim WFS-Download: ' + error.message);
-    }
-}
 
-/**
- * Close WFS dropdown when clicking outside
- */
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('wfs-dropdown');
-    const dropdownContent = document.getElementById('wfs-dropdown-content');
-    
-    if (dropdown && dropdownContent && !dropdown.contains(event.target)) {
-        dropdownContent.classList.remove('show');
-    }
-});
+
 
 // Export functions for global access
 window.updateAreaDropdown = updateAreaDropdown;
@@ -1024,6 +966,4 @@ window.toggleWeatherStations = toggleWeatherStations;
 window.showInfo = showInfo;
 window.showPrivacy = showPrivacy;
 window.closeModal = closeModal;
-window.downloadResults = downloadResults;
-window.toggleWfsDropdown = toggleWfsDropdown;
-window.downloadWfsLayer = downloadWfsLayer; 
+window.downloadResults = downloadResults; 

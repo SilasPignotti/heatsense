@@ -604,34 +604,7 @@ class UHIAnalysisBackend:
         except Exception as e:
             self.logger.error(f"Failed to save analysis data: {e}")
     
-    def get_layer_data(self, analysis_id: str, layer_name: str, format_type: str = 'geojson') -> Optional[Dict[str, Any]]:
-        """Get specific layer data for download."""
-        try:
-            if layer_name == 'temperature':
-                file_path = os.path.join(self.temp_dir, f"{analysis_id}_temperature.geojson")
-            elif layer_name == 'heat_islands':
-                file_path = os.path.join(self.temp_dir, f"{analysis_id}_heat_islands.geojson")
-            elif layer_name == 'boundary':
-                file_path = os.path.join(self.temp_dir, f"{analysis_id}_boundary.geojson")
-            else:
-                return None
-            
-            if not os.path.exists(file_path):
-                return None
-            
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            if format_type == 'geojson':
-                return data
-            else:
-                # For other formats, we'd need to convert using geopandas
-                # This is a placeholder for future implementation
-                return data
-                
-        except Exception as e:
-            self.logger.error(f"Failed to get layer data: {e}")
-            return None
+
     
     def cleanup_analysis_data(self, analysis_id: str) -> None:
         """Clean up temporary analysis data files."""

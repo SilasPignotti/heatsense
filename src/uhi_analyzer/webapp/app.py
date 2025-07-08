@@ -61,6 +61,106 @@ BERLIN_DISTRICTS = [
 # Federal states (currently only Berlin supported)
 FEDERAL_STATES = ["Berlin"]
 
+# Berlin Ortsteile for dropdown
+BERLIN_ORTSTEILE = [
+    "Adlershof",
+    "Altglienicke",
+    "Alt-Hohenschönhausen",
+    "Alt-Treptow",
+    "Baumschulenweg",
+    "Biesdorf",
+    "Blankenburg",
+    "Blankenfelde",
+    "Bohnsdorf",
+    "Borsigwalde",
+    "Britz",
+    "Buch",
+    "Buckow",
+    "Charlottenburg",
+    "Charlottenburg-Nord",
+    "Dahlem",
+    "Falkenberg",
+    "Falkenhagener Feld",
+    "Fennpfuhl",
+    "Französisch Buchholz",
+    "Friedenau",
+    "Friedrichshagen",
+    "Friedrichsfelde",
+    "Friedrichshain",
+    "Frohnau",
+    "Gatow",
+    "Gesundbrunnen",
+    "Gropiusstadt",
+    "Grünau",
+    "Grunewald",
+    "Hakenfelde",
+    "Halensee",
+    "Hansaviertel",
+    "Haselhorst",
+    "Heiligensee",
+    "Heinersdorf",
+    "Hellersdorf",
+    "Hermsdorf",
+    "Johannisthal",
+    "Karlshorst",
+    "Karow",
+    "Kaulsdorf",
+    "Kladow",
+    "Konradshöhe",
+    "Köpenick",
+    "Kreuzberg",
+    "Lankwitz",
+    "Lichtenberg",
+    "Lichtenrade",
+    "Lichterfelde",
+    "Lübars",
+    "Mahlsdorf",
+    "Malchow",
+    "Mariendorf",
+    "Marienfelde",
+    "Märkisches Viertel",
+    "Marzahn",
+    "Mitte",
+    "Moabit",
+    "Müggelheim",
+    "Neukölln",
+    "Neu-Hohenschönhausen",
+    "Niederschöneweide",
+    "Niederschönhausen",
+    "Nikolassee",
+    "Oberschöneweide",
+    "Pankow",
+    "Plänterwald",
+    "Prenzlauer Berg",
+    "Rahnsdorf",
+    "Reinickendorf",
+    "Rosenthal",
+    "Rudow",
+    "Rummelsburg",
+    "Schmargendorf",
+    "Schmöckwitz",
+    "Schöneberg",
+    "Siemensstadt",
+    "Spandau",
+    "Staaken",
+    "Stadtrandsiedlung Malchow",
+    "Steglitz",
+    "Tegel",
+    "Tempelhof",
+    "Tiergarten",
+    "Waidmannslust",
+    "Wannsee",
+    "Wartenberg",
+    "Wedding",
+    "Weißensee",
+    "Westend",
+    "Wilhelmsruh",
+    "Wilhelmstadt",
+    "Wilmersdorf",
+    "Wittenau",
+    "Zehlendorf"
+]
+
 @app.route('/')
 def index():
     """Main page of the HeatSense application."""
@@ -74,9 +174,13 @@ def get_areas():
     """API endpoint to get available areas based on selection type."""
     area_type = request.args.get('type', 'bezirk')
     
-    if area_type == 'bundesland':
-        return jsonify(FEDERAL_STATES)
-    else:  # bezirk
+    if area_type == 'stadt':
+        return jsonify(FEDERAL_STATES)  # Only Berlin supported
+    elif area_type == 'bezirk':
+        return jsonify(BERLIN_DISTRICTS)
+    elif area_type == 'ortsteil':
+        return jsonify(BERLIN_ORTSTEILE)
+    else:  # default to bezirk
         return jsonify(BERLIN_DISTRICTS)
 
 @app.route('/api/analyze', methods=['POST'])
@@ -239,137 +343,11 @@ def download_results():
             'errors': [f'Download failed: {str(e)}']
         }), 500
 
-@app.route('/api/wfs/layers')
-def get_available_layers():
-    """WFS-like endpoint to get available layers."""
-    return jsonify({
-        'layers': [
-            {
-                'name': 'temperature',
-                'title': 'Temperatur-Layer',
-                'description': 'Räumliche Temperaturverteilung',
-                'geometry_type': 'Polygon',
-                'srs': 'EPSG:4326',
-                'formats': ['geojson', 'shapefile', 'geopackage']
-            },
-            {
-                'name': 'heat_islands',
-                'title': 'Heat Islands',
-                'description': 'Identifizierte Wärmeinseln/Hotspots',
-                'geometry_type': 'Polygon',
-                'srs': 'EPSG:4326',
-                'formats': ['geojson', 'shapefile', 'geopackage']
-            }
-        ]
-    })
 
-@app.route('/api/wfs/download/<layer_name>')
-def download_layer(layer_name):
-    """WFS-like endpoint to download specific layers."""
-    try:
-        # Get analysis ID from session
-        analysis_id = session.get('analysis_id')
-        if not analysis_id:
-            return jsonify({
-                'status': 'error',
-                'errors': ['No analysis results available']
-            }), 404
-        
-        # Get format and bbox from query parameters
-        format_type = request.args.get('format', 'geojson').lower()
-        bbox = request.args.get('bbox', None)  # format: minx,miny,maxx,maxy
-        
-        # Validate layer name
-        if layer_name not in ['temperature', 'heat_islands', 'boundary']:
-            return jsonify({
-                'status': 'error',
-                'errors': ['Invalid layer name. Available: temperature, heat_islands, boundary']
-            }), 400
-        
-        # Get layer data from backend
-        layer_data = backend.get_layer_data(analysis_id, layer_name, format_type)
-        if not layer_data:
-            return jsonify({
-                'status': 'error',
-                'errors': ['Layer data not found']
-            }), 404
-        
-        # Apply bbox filter if provided
-        if bbox:
-            try:
-                minx, miny, maxx, maxy = map(float, bbox.split(','))
-                # TODO: Implement bbox filtering
-                # For now, return warning
-                logger.warning(f"Bbox filtering not yet implemented: {bbox}")
-            except ValueError:
-                return jsonify({
-                    'status': 'error',
-                    'errors': ['Invalid bbox format. Use: minx,miny,maxx,maxy']
-                }), 400
-        
-        # Generate filename
-        area = session.get('analysis_id', '').split('_')[0] if session.get('analysis_id') else 'area'
-        filename = f"{layer_name}_{area}.{format_type}"
-        
-        # Return data based on format
-        if format_type == 'geojson':
-            response = jsonify(layer_data)
-            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-            response.headers['Content-Type'] = 'application/geo+json'
-            return response
-        else:
-            # For other formats, return JSON for now
-            # TODO: Implement shapefile, geopackage exports
-            response = jsonify(layer_data)
-            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-            return response
-        
-    except Exception as e:
-        logger.error(f"Layer download failed: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'errors': [f'Layer download failed: {str(e)}']
-        }), 500
 
-@app.route('/api/wfs/capabilities')
-def get_capabilities():
-    """WFS GetCapabilities equivalent."""
-    return jsonify({
-        'service': 'WFS',
-        'version': '2.0.0',
-        'title': 'HeatSense Urban Heat Island Analysis Service',
-        'abstract': 'Web Feature Service für Urban Heat Island Analysedaten',
-        'keywords': ['Urban Heat Island', 'Temperature', 'Climate', 'Berlin'],
-        'provider': {
-            'name': 'HeatSense',
-            'site': 'https://heatsense.example.com'
-        },
-        'operations': [
-            'GetCapabilities',
-            'DescribeFeatureType',
-            'GetFeature'
-        ],
-        'output_formats': [
-            'application/json',
-            'application/vnd.geo+json',
-            'application/gml+xml',
-            'application/zip'
-        ],
-        'feature_types': [
-            {
-                'name': 'temperature',
-                'title': 'Temperatur-Layer',
-                'srs': 'EPSG:4326',
-                'bbox': [13.0, 52.3, 13.8, 52.7]  # Berlin bbox
-            },
-            {
-                'name': 'heat_islands',
-                'title': 'Heat Islands',
-                'srs': 'EPSG:4326',
-                'bbox': [13.0, 52.3, 13.8, 52.7]  # Berlin bbox
-            }
-        ]
-    })
+
+
+
 
 @app.errorhandler(404)
 def not_found(error):
