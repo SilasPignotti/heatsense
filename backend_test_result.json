@@ -1,5 +1,5 @@
 {
-  "status": "error",
+  "status": "completed",
   "progress": 100,
   "metadata": {
     "area": "Kreuzberg",
@@ -7,8 +7,19 @@
     "end_date": "2023-07-31",
     "performance_mode": "fast",
     "include_weather": false,
-    "timestamp": "2025-07-05T15:01:32.822688",
-    "version": "1.0"
+    "timestamp": "2025-07-07T20:14:17.902295",
+    "version": "1.0",
+    "performance_metrics": {
+      "execution_time_seconds": 13.0619478225708,
+      "performance_mode": "fast",
+      "analyzer_type": "unknown",
+      "grid_cells_processed": 803,
+      "data_sources": {
+        "satellite_data": true,
+        "weather_stations": false,
+        "land_cover": true
+      }
+    }
   },
   "data": {
     "summary": {
@@ -30071,36 +30082,40 @@
       },
       "correlations": {
         "low_density_urban": {
-          "correlation": NaN,
-          "p_value": NaN,
-          "n_samples": "478"
+          "correlation": 0.0,
+          "p_value": 1.0,
+          "n_samples": 478,
+          "note": "constant_values"
         },
         "urban_green": {
-          "correlation": NaN,
-          "p_value": NaN,
-          "n_samples": "146"
+          "correlation": 0.0,
+          "p_value": 1.0,
+          "n_samples": 146,
+          "note": "constant_values"
         },
         "high_density_urban": {
-          "correlation": NaN,
-          "p_value": NaN,
-          "n_samples": "591"
+          "correlation": 0.0,
+          "p_value": 1.0,
+          "n_samples": 591,
+          "note": "constant_values"
         },
         "water_and_natural": {
-          "correlation": NaN,
-          "p_value": NaN,
-          "n_samples": "27"
+          "correlation": 0.0,
+          "p_value": 1.0,
+          "n_samples": 27,
+          "note": "constant_values"
         },
         "overall": {
           "correlation": 0.095,
           "p_value": 0.001,
-          "n_samples": "1242"
+          "n_samples": 1242
         }
       },
       "category_descriptions": {
-        "high_density_urban": "Hochversiegelte urbane Bereiche (Stadtzentren, Industrie, Verkehr)",
-        "low_density_urban": "Niedrigversiegelte urbane Bereiche (Vororte, Baustellen)",
-        "urban_green": "Urbane Gr\u00fcnfl\u00e4chen (Parks, Sportanlagen)",
-        "water_and_natural": "Wasserfl\u00e4chen und nat\u00fcrliche offene Bereiche"
+        "high_density_urban": "High-density urban areas (city centers, industry, transport)",
+        "low_density_urban": "Low-density urban areas (suburbs, construction sites)",
+        "urban_green": "Urban green areas (parks, sports facilities)",
+        "water_and_natural": "Water bodies and natural open areas"
       },
       "analysis_type": "grouped",
       "summary": {
@@ -30124,9 +30139,7 @@
     },
     "visualizations": {}
   },
-  "errors": [
-    "Analysis failed: 'UHIAnalysisBackend' object has no attribute 'cache_enabled'"
-  ],
+  "errors": [],
   "warnings": [],
-  "execution_time": 357.1672410964966
+  "execution_time": 13.06
 }

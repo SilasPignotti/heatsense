@@ -9,6 +9,7 @@ from .settings import (
     UHI_EARTH_ENGINE_PROJECT,
     UHI_LOG_DIR,
     UHI_LOG_LEVEL,
+    UHI_PERFORMANCE_MODES,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "UHI_EARTH_ENGINE_PROJECT",
     "UHI_LOG_DIR",
     "UHI_LOG_LEVEL",
+    "UHI_PERFORMANCE_MODES",
 ] 

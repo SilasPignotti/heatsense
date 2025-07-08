@@ -1,230 +1,391 @@
 #!/usr/bin/env python3
 """
-Urban Heat Island Analysis Web Application
+HeatSense - Urban Heat Island Analyzer Web Application
 
-Flask-based web application providing an interactive interface for UHI analysis.
+A Flask web application providing an intuitive interface for urban heat island analysis.
+Built with modern design principles and comprehensive data visualization.
 """
 
 import json
 import logging
 import os
 import sys
-import numpy as np
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, date
 from typing import Dict, Any
 
-# Add the src directory to the Python path
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, send_file
 from flask_cors import CORS
+import io
+import zipfile
+import geopandas as gpd
+from shapely.geometry import box
 
-# Import our existing backend
-from uhi_analyzer.scripts.backend_example import UHIAnalysisBackend
+# Add the src directory to Python path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from uhi_analyzer.webapp.backend_logic import UHIAnalysisBackend
+from uhi_analyzer.config.settings import UHI_PERFORMANCE_MODES
 
 # Initialize Flask app
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'uhi-analyzer-secret-key'
+app = Flask(__name__, 
+           template_folder='templates', 
+           static_folder='static')
+app.secret_key = os.environ.get('SECRET_KEY', 'heatsense-dev-key-2025')
+
+# Enable CORS for development
 CORS(app)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize backend
 backend = UHIAnalysisBackend(log_level="INFO")
 
-# Global variables for analysis state
-current_analysis = None
-analysis_results = {}
+# Berlin districts for dropdown
+BERLIN_DISTRICTS = [
+    "Charlottenburg-Wilmersdorf",
+    "Friedrichshain-Kreuzberg", 
+    "Lichtenberg",
+    "Marzahn-Hellersdorf",
+    "Mitte",
+    "Neukölln",
+    "Pankow",
+    "Reinickendorf",
+    "Spandau",
+    "Steglitz-Zehlendorf",
+    "Tempelhof-Schöneberg",
+    "Treptow-Köpenick"
+]
 
-
-def convert_numpy_types(obj):
-    """Convert numpy types to native Python types for JSON serialization."""
-    if isinstance(obj, dict):
-        return {key: convert_numpy_types(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy_types(item) for item in obj]
-    elif isinstance(obj, tuple):
-        return tuple(convert_numpy_types(item) for item in obj)
-    elif isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        # Check for NaN or infinite values
-        if np.isnan(obj) or np.isinf(obj):
-            return None
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, np.bool_):
-        return bool(obj)
-    elif isinstance(obj, np.number):
-        # Handle any numpy numeric type not caught above
-        try:
-            return obj.item()
-        except (ValueError, TypeError):
-            return float(obj) if np.issubdtype(obj.dtype, np.floating) else int(obj)
-    elif hasattr(obj, 'dtype') and hasattr(obj, 'item'):
-        # Handle other numpy scalar types
-        try:
-            return obj.item()
-        except (ValueError, TypeError):
-            return str(obj)
-    else:
-        return obj
-
+# Federal states (currently only Berlin supported)
+FEDERAL_STATES = ["Berlin"]
 
 @app.route('/')
 def index():
-    """Main page."""
-    return render_template('index.html')
+    """Main page of the HeatSense application."""
+    return render_template('index.html', 
+                         districts=BERLIN_DISTRICTS,
+                         federal_states=FEDERAL_STATES,
+                         performance_modes=UHI_PERFORMANCE_MODES)
 
+@app.route('/api/areas')
+def get_areas():
+    """API endpoint to get available areas based on selection type."""
+    area_type = request.args.get('type', 'bezirk')
+    
+    if area_type == 'bundesland':
+        return jsonify(FEDERAL_STATES)
+    else:  # bezirk
+        return jsonify(BERLIN_DISTRICTS)
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
-    """Main API endpoint for UHI analysis."""
+    """API endpoint to perform UHI analysis."""
     try:
-        data = request.json
+        data = request.get_json()
         
-        # Validate input data
-        required_fields = ['area', 'start_date', 'end_date', 'performance_mode']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        # Extract parameters
+        area_type = data.get('area_type', 'bezirk')
+        area = data.get('area')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        performance_mode = data.get('performance_mode', 'standard')
         
-        # Run analysis
+        # Validate inputs
+        if not area or not start_date or not end_date:
+            return jsonify({
+                'status': 'error',
+                'errors': ['Missing required parameters: area, start_date, end_date']
+            }), 400
+        
+        # Validate performance mode
+        if performance_mode not in UHI_PERFORMANCE_MODES:
+            return jsonify({
+                'status': 'error', 
+                'errors': [f'Invalid performance mode: {performance_mode}']
+            }), 400
+        
+        # Convert dates to required format (YYYY-MM-DD)
+        try:
+            start_date_parsed = datetime.strptime(start_date, '%d.%m.%Y').strftime('%Y-%m-%d')
+            end_date_parsed = datetime.strptime(end_date, '%d.%m.%Y').strftime('%Y-%m-%d')
+        except ValueError as e:
+            return jsonify({
+                'status': 'error',
+                'errors': [f'Invalid date format. Use DD.MM.YYYY: {str(e)}']
+            }), 400
+        
+        # Store analysis parameters in session for progress tracking
+        session['analysis_id'] = f"{area}_{start_date}_{end_date}_{performance_mode}"
+        session['analysis_status'] = 'running'
+        
+        logger.info(f"Starting analysis: {area}, {start_date_parsed} to {end_date_parsed}, mode: {performance_mode}")
+        
+        # Perform analysis using backend
         result = backend.analyze(
-            area=data['area'],
-            start_date=data['start_date'],
-            end_date=data['end_date'],
-            performance_mode=data['performance_mode']
+            area=area,
+            start_date=start_date_parsed,
+            end_date=end_date_parsed,
+            performance_mode=performance_mode
         )
         
-        # Store results globally for progress tracking
-        global analysis_results
-        analysis_results = result
-        
-        # Convert numpy types to native Python types for JSON serialization
-        result = convert_numpy_types(result)
-        
-        # Log the result structure for debugging
-        logger.info(f"Analysis result structure: {list(result.keys())}")
-        if 'data' in result:
-            logger.info(f"Data structure: {list(result['data'].keys())}")
+        # Update session status
+        session['analysis_status'] = result.get('status', 'completed')
         
         return jsonify(result)
         
     except Exception as e:
-        logger.error(f"Analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Analysis failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'errors': [f'Analysis failed: {str(e)}'],
+            'execution_time': 0
+        }), 500
 
-
-@app.route('/api/areas', methods=['GET'])
-def get_areas():
-    """Get available areas for analysis."""
-    # Berlin areas that work with the backend
-    berlin_areas = [
-        "Kreuzberg", "Mitte", "Prenzlauer Berg", "Friedrichshain", 
-        "Charlottenburg", "Wilmersdorf", "Schöneberg", "Tempelhof",
-        "Neukölln", "Treptow", "Köpenick", "Lichtenberg", "Pankow",
-        "Wedding", "Moabit", "Tiergarten", "Spandau", "Steglitz",
-        "Zehlendorf", "Reinickendorf", "Marzahn", "Hellersdorf",
-        "Charlottenburg-Wilmersdorf", "Friedrichshain-Kreuzberg",
-        "Tempelhof-Schöneberg", "Treptow-Köpenick", "Marzahn-Hellersdorf"
-    ]
+@app.route('/api/progress')
+def get_progress():
+    """API endpoint to get analysis progress."""
+    analysis_id = session.get('analysis_id')
+    status = session.get('analysis_status', 'unknown')
     
+    # In a real implementation, you might track progress in Redis or database
+    # For now, return basic status information
     return jsonify({
-        'areas': berlin_areas,
-        'default': 'Kreuzberg'
+        'analysis_id': analysis_id,
+        'status': status,
+        'progress': 100 if status == 'completed' else 50  # Simplified progress
     })
 
-
-@app.route('/api/performance-modes', methods=['GET'])
+@app.route('/api/performance-modes')
 def get_performance_modes():
-    """Get available performance modes."""
-    modes = {
-        'preview': {
+    """API endpoint to get available performance modes with descriptions."""
+    # Define modes in the desired order with German descriptions and icons
+    mode_definitions = [
+        {
+            'key': 'preview',
             'name': 'Preview',
-            'description': 'Schnellste Analyse für erste Einblicke',
-            'duration': '< 30s',
-            'accuracy': 'Basis'
+            'icon': 'fas fa-eye',
+            'estimated_time': '<30s',
+            'description': 'Spontane Analyse für erste Einblicke'
         },
-        'fast': {
+        {
+            'key': 'fast',
             'name': 'Fast',
-            'description': 'Empfohlen für die meisten Anwendungen',
-            'duration': '30-60s',
-            'accuracy': 'Gut'
+            'icon': 'fas fa-bolt',
+            'estimated_time': '30-60s',
+            'description': 'Empfohlen für die meisten Anwendungen'
         },
-        'standard': {
+        {
+            'key': 'standard',
             'name': 'Standard',
-            'description': 'Ausgewogene Performance und Detail',
-            'duration': '1-3 min',
-            'accuracy': 'Hoch'
+            'icon': 'fas fa-balance-scale',
+            'estimated_time': '1-3 min',
+            'description': 'Ausgewogene Performance und Detail'
         },
-        'detailed': {
+        {
+            'key': 'detailed',
             'name': 'Detailed',
-            'description': 'Vollständige Analyse mit Wetterdaten',
-            'duration': '3-10 min',
-            'accuracy': 'Sehr hoch'
+            'icon': 'fas fa-microscope',
+            'estimated_time': '3-10 min',
+            'description': 'Vollständige Analyse mit Performance und Detail'
         }
-    }
+    ]
+    
+    # Create ordered dictionary with mode information
+    modes = {}
+    for mode_def in mode_definitions:
+        key = mode_def['key']
+        if key in UHI_PERFORMANCE_MODES:
+            config = UHI_PERFORMANCE_MODES[key]
+            modes[key] = {
+                'name': mode_def['name'],
+                'icon': mode_def['icon'],
+                'description': mode_def['description'],
+                'estimated_time': mode_def['estimated_time'],
+                'grid_cell_size': config.get('grid_cell_size', 100),
+                'includes_weather': key in ['standard', 'detailed']
+            }
     
     return jsonify(modes)
 
-
-@app.route('/api/progress', methods=['GET'])
-def get_progress():
-    """Get current analysis progress."""
-    global analysis_results
-    if analysis_results:
+@app.route('/api/download-results')
+def download_results():
+    """API endpoint to download analysis results as JSON."""
+    try:
+        # Get analysis ID from session
+        analysis_id = session.get('analysis_id')
+        if not analysis_id:
+            return jsonify({
+                'status': 'error',
+                'errors': ['No analysis results available for download']
+            }), 404
+        
+        # Get stored results from session or a more persistent storage
+        # For now, we'll indicate that the client should send the data
+        # In a production app, you might store results in Redis or database
+        
+        # For now, return a response that tells the client to use JavaScript download
         return jsonify({
-            'progress': analysis_results.get('progress', 0),
-            'status': analysis_results.get('status', 'unknown'),
-            'execution_time': analysis_results.get('execution_time', 0)
+            'status': 'success',
+            'message': 'Use client-side download',
+            'analysis_id': analysis_id
         })
-    return jsonify({'progress': 0, 'status': 'idle', 'execution_time': 0})
+        
+    except Exception as e:
+        logger.error(f"Download failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'errors': [f'Download failed: {str(e)}']
+        }), 500
 
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint."""
+@app.route('/api/wfs/layers')
+def get_available_layers():
+    """WFS-like endpoint to get available layers."""
     return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
+        'layers': [
+            {
+                'name': 'temperature',
+                'title': 'Temperatur-Layer',
+                'description': 'Räumliche Temperaturverteilung',
+                'geometry_type': 'Polygon',
+                'srs': 'EPSG:4326',
+                'formats': ['geojson', 'shapefile', 'geopackage']
+            },
+            {
+                'name': 'heat_islands',
+                'title': 'Heat Islands',
+                'description': 'Identifizierte Wärmeinseln/Hotspots',
+                'geometry_type': 'Polygon',
+                'srs': 'EPSG:4326',
+                'formats': ['geojson', 'shapefile', 'geopackage']
+            }
+        ]
     })
 
+@app.route('/api/wfs/download/<layer_name>')
+def download_layer(layer_name):
+    """WFS-like endpoint to download specific layers."""
+    try:
+        # Get analysis ID from session
+        analysis_id = session.get('analysis_id')
+        if not analysis_id:
+            return jsonify({
+                'status': 'error',
+                'errors': ['No analysis results available']
+            }), 404
+        
+        # Get format and bbox from query parameters
+        format_type = request.args.get('format', 'geojson').lower()
+        bbox = request.args.get('bbox', None)  # format: minx,miny,maxx,maxy
+        
+        # Validate layer name
+        if layer_name not in ['temperature', 'heat_islands', 'boundary']:
+            return jsonify({
+                'status': 'error',
+                'errors': ['Invalid layer name. Available: temperature, heat_islands, boundary']
+            }), 400
+        
+        # Get layer data from backend
+        layer_data = backend.get_layer_data(analysis_id, layer_name, format_type)
+        if not layer_data:
+            return jsonify({
+                'status': 'error',
+                'errors': ['Layer data not found']
+            }), 404
+        
+        # Apply bbox filter if provided
+        if bbox:
+            try:
+                minx, miny, maxx, maxy = map(float, bbox.split(','))
+                # TODO: Implement bbox filtering
+                # For now, return warning
+                logger.warning(f"Bbox filtering not yet implemented: {bbox}")
+            except ValueError:
+                return jsonify({
+                    'status': 'error',
+                    'errors': ['Invalid bbox format. Use: minx,miny,maxx,maxy']
+                }), 400
+        
+        # Generate filename
+        area = session.get('analysis_id', '').split('_')[0] if session.get('analysis_id') else 'area'
+        filename = f"{layer_name}_{area}.{format_type}"
+        
+        # Return data based on format
+        if format_type == 'geojson':
+            response = jsonify(layer_data)
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response.headers['Content-Type'] = 'application/geo+json'
+            return response
+        else:
+            # For other formats, return JSON for now
+            # TODO: Implement shapefile, geopackage exports
+            response = jsonify(layer_data)
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        
+    except Exception as e:
+        logger.error(f"Layer download failed: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'errors': [f'Layer download failed: {str(e)}']
+        }), 500
+
+@app.route('/api/wfs/capabilities')
+def get_capabilities():
+    """WFS GetCapabilities equivalent."""
+    return jsonify({
+        'service': 'WFS',
+        'version': '2.0.0',
+        'title': 'HeatSense Urban Heat Island Analysis Service',
+        'abstract': 'Web Feature Service für Urban Heat Island Analysedaten',
+        'keywords': ['Urban Heat Island', 'Temperature', 'Climate', 'Berlin'],
+        'provider': {
+            'name': 'HeatSense',
+            'site': 'https://heatsense.example.com'
+        },
+        'operations': [
+            'GetCapabilities',
+            'DescribeFeatureType',
+            'GetFeature'
+        ],
+        'output_formats': [
+            'application/json',
+            'application/vnd.geo+json',
+            'application/gml+xml',
+            'application/zip'
+        ],
+        'feature_types': [
+            {
+                'name': 'temperature',
+                'title': 'Temperatur-Layer',
+                'srs': 'EPSG:4326',
+                'bbox': [13.0, 52.3, 13.8, 52.7]  # Berlin bbox
+            },
+            {
+                'name': 'heat_islands',
+                'title': 'Heat Islands',
+                'srs': 'EPSG:4326',
+                'bbox': [13.0, 52.3, 13.8, 52.7]  # Berlin bbox
+            }
+        ]
+    })
 
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors."""
-    return jsonify({'error': 'Not found'}), 404
-
+    return render_template('404.html'), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 errors."""
-    return jsonify({'error': 'Internal server error'}), 500
-
+    logger.error(f"Internal server error: {str(error)}")
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
-    # Create template and static directories if they don't exist
-    template_dir = Path(__file__).parent / 'templates'
-    static_dir = Path(__file__).parent / 'static'
+    # Create necessary directories
+    os.makedirs('logs', exist_ok=True)
     
-    template_dir.mkdir(exist_ok=True)
-    static_dir.mkdir(exist_ok=True)
-    
-    # Set Flask template and static directories
-    app.template_folder = str(template_dir)
-    app.static_folder = str(static_dir)
-    
-    # Run the app
-    app.run(
-        host='127.0.0.1',
-        port=8000,
-        debug=True,
-        use_reloader=True
-    ) 
+    # Run the application
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=8000, debug=debug_mode) 

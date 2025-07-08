@@ -20,9 +20,6 @@ from wetterdienst.provider.dwd.observation import DwdObservationRequest
 
 from ..config.settings import CRS_CONFIG, DWD_SETTINGS, DWD_TEMPERATURE_PARAMETERS
 
-# Data processing modes
-ProcessingMode = Literal['station_data', 'interpolated', 'uhi_analysis']
-
 
 class DWDDataDownloader:
     """
@@ -365,10 +362,9 @@ class DWDDataDownloader:
         geometry: Union[Point, Polygon, MultiPolygon, str, Dict[str, Any], gpd.GeoDataFrame],
         start_date: datetime,
         end_date: datetime,
-        interpolate: bool = True,
+        interpolate: Optional[bool] = None,
         resolution: float = None,
-        processing_mode: ProcessingMode = 'station_data'
-    ) -> gpd.GeoDataFrame:
+    ) -> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]]:
         """
         Download weather data for a geometry and time period.
         
@@ -378,24 +374,18 @@ class DWDDataDownloader:
             end_date: End date
             interpolate: Whether to interpolate (default from config)
             resolution: Resolution of the interpolation grid in meters
-            processing_mode: Processing mode ('station_data', 'interpolated', 'uhi_analysis')
             
         Returns:
-            GeoDataFrame with temperature data
+            If interpolate=False: GeoDataFrame with station temperature data
+            If interpolate=True: Tuple of (station_data, interpolated_data) GeoDataFrames
         """
         # Parameter defaults
         interpolate = self.interpolate_by_default if interpolate is None else interpolate
         resolution = resolution or self.interpolation_resolution
         
-        # Adjust interpolate flag based on processing mode
-        if processing_mode == 'interpolated':
-            interpolate = True
-        elif processing_mode == 'station_data':
-            interpolate = False
-        
         if self.logger:
             self.logger.info(f"Loading weather data for period {start_date} to {end_date}")
-            self.logger.info(f"Buffer: {self.buffer_distance}m, Resolution: {resolution}m, Mode: {processing_mode}")
+            self.logger.info(f"Buffer: {self.buffer_distance}m, Resolution: {resolution}m")
         
         # Create geometry from input
         if isinstance(geometry, gpd.GeoDataFrame):
@@ -429,6 +419,9 @@ class DWDDataDownloader:
         if self.logger:
             self.logger.info(f"Found {len(stations_with_temp)} stations with temperature data")
         
+        # Add source identifier to station data
+        stations_with_temp['source'] = 'station'
+        
         # Perform interpolation if requested
         if interpolate:
             if self.logger:
@@ -440,31 +433,30 @@ class DWDDataDownloader:
             if grid_gdf.empty:
                 if self.logger:
                     self.logger.warning("No grid points created for interpolation")
-                result_gdf = stations_with_temp
-            else:
-                # Interpolate temperatures
-                result_gdf = self._interpolate_temperature(
-                    stations_with_temp,
-                    grid_gdf,
-                    method=self.interpolation_method
-                )
-                
-                # Add metadata
-                result_gdf['source'] = 'interpolated'
-                result_gdf['n_stations'] = len(stations_with_temp)
-                result_gdf['resolution_m'] = resolution
-                result_gdf['period_start'] = stations_with_temp['period_start'].iloc[0]
-                result_gdf['period_end'] = stations_with_temp['period_end'].iloc[0]
-                
-                if self.logger:
-                    self.logger.info(f"Interpolation completed: {len(result_gdf)} points created")
+                return stations_with_temp
+            
+            # Interpolate temperatures
+            interpolated_gdf = self._interpolate_temperature(
+                stations_with_temp,
+                grid_gdf,
+                method=self.interpolation_method
+            )
+            
+            # Add metadata to interpolated data
+            interpolated_gdf['source'] = 'interpolated'
+            interpolated_gdf['n_stations'] = len(stations_with_temp)
+            interpolated_gdf['resolution_m'] = resolution
+            interpolated_gdf['period_start'] = stations_with_temp['period_start'].iloc[0]
+            interpolated_gdf['period_end'] = stations_with_temp['period_end'].iloc[0]
+            
+            if self.logger:
+                self.logger.info(f"Interpolation completed: {len(interpolated_gdf)} points created")
+            
+            # Return both datasets
+            return stations_with_temp, interpolated_gdf
         else:
-            # Return station data
-            result_gdf = stations_with_temp.copy()
-            result_gdf['source'] = 'station'
-        
-        
-        return result_gdf
+            # Return only station data
+            return stations_with_temp
 
 
 if __name__ == "__main__":

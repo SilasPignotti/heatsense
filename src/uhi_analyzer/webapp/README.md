@@ -1,181 +1,262 @@
-# UHI Analysis Web Application
+# HeatSense - Urban Heat Island Analyzer Web Application
 
-This web application provides an interactive interface for Urban Heat Island (UHI) analysis with a modern Flask-based frontend and comprehensive data visualization.
+🔥 **HeatSense** is a comprehensive Flask web application for analyzing urban heat islands in Berlin. It provides an intuitive interface for analyzing temperature distributions, identifying hotspots, and generating climate adaptation recommendations.
 
 ## Features
 
-- **🗺️ Interactive Map**: Large-scale map visualization with temperature heatmaps and layer controls
-- **📊 Real-time Statistics**: Temperature metrics, hotspot analysis, and land use correlations
-- **🎛️ Input Controls**: Date range selection, area picker, and performance mode settings
-- **📈 Dynamic Charts**: Temperature distribution and correlation analysis visualizations
-- **🔥 Hotspot Detection**: Automated identification and mapping of urban heat islands
-- **💡 Recommendations**: AI-generated mitigation strategies based on analysis results
-- **📱 Responsive Design**: Modern, mobile-friendly interface with clean aesthetics
+### 🎯 Core Functionality
+- **Interactive Analysis**: Select areas (federal state or district level) and time periods for analysis
+- **Multiple Performance Modes**: Choose between preview, fast, standard, and detailed analysis modes
+- **Real-time Progress Tracking**: Monitor analysis progress with live updates
+- **Comprehensive Results**: Temperature distribution, hotspots, land use correlations, and recommendations
 
-## Quick Start
+### 🗺️ Interactive Mapping
+- **Leaflet-based Maps**: Modern, responsive mapping interface
+- **Temperature Visualization**: Color-coded temperature grids with detailed overlays
+- **Hotspot Identification**: Visual markers for high-temperature areas
+- **Weather Station Data**: Integration with German Weather Service (DWD) stations
+- **Layer Controls**: Toggle different data layers on/off
 
-### 1. Install Dependencies
+### 📊 Data Visualization
+- **Temperature Distribution Charts**: Histogram and statistical analysis
+- **Land Use Correlation**: Visualize relationships between land use and temperature
+- **Key Performance Indicators**: Dashboard with critical metrics
+- **Recommendations Engine**: Actionable climate adaptation strategies
 
-All dependencies are managed via `uv` and included in `pyproject.toml`:
+### 🎨 Modern Design
+- **Responsive Layout**: Works on desktop, tablet, and mobile devices
+- **Clean UI/UX**: Modern design following current best practices
+- **Heat-themed Color Palette**: Visual design aligned with thermal analysis
+- **Accessibility**: Proper contrast ratios and keyboard navigation
 
-```bash
-uv sync
-```
+## Getting Started
 
-### 2. Start the Web Application
+### Prerequisites
+- Python 3.11+
+- UV package manager installed
+- Internet connection for data downloads
 
-```bash
-# Start the web application
-uv run src/uhi_analyzer/webapp/start_webapp.py
-```
+### Installation
 
-The web application will be available at: **http://127.0.0.1:8000**
+1. **Install Dependencies**:
+   ```bash
+   cd urban_heat_island_analyzer
+   uv sync
+   ```
 
-The browser will open automatically, or you can manually navigate to the URL.
+2. **Set Up Environment Variables** (optional):
+   ```bash
+   # Create .env file if needed
+   echo "SECRET_KEY=your-secret-key-here" > .env
+   echo "UHI_EARTH_ENGINE_PROJECT=your-gee-project-id" >> .env
+   ```
 
-## Architecture
+3. **Launch the Application**:
+   ```bash
+   uv run src/uhi_analyzer/webapp/run_webapp.py
+   ```
 
-```
-├── app.py                 # Flask web application
-├── start_webapp.py        # Startup script
-├── templates/
-│   ├── base.html          # Base template with header and modals
-│   └── index.html         # Main application page
-├── static/
-│   ├── css/
-│   │   └── styles.css     # Modern CSS styling
-│   └── js/
-│       ├── app.js         # Main application logic
-│       ├── map.js         # Map visualization (Leaflet)
-│       └── charts.js      # Chart rendering (Chart.js)
-├── backend/
-│   └── backend_example.py # Core analysis engine
-└── README.md
-```
+   Or alternatively:
+   ```bash
+   cd src/uhi_analyzer/webapp
+   uv run python app.py
+   ```
 
-## API Endpoints
-
-- `GET /` - Main web application interface
-- `GET /api/health` - Health check and status
-- `GET /api/areas` - Available analysis areas (Berlin districts)
-- `GET /api/performance-modes` - Available performance modes with descriptions
-- `POST /api/analyze` - Run UHI analysis with parameters
-- `GET /api/progress` - Get current analysis progress
+4. **Open in Browser**:
+   Navigate to `http://localhost:5000` in your web browser.
 
 ## Usage Guide
 
-### 1. **Select Analysis Area**
-Choose from 25+ Berlin districts and neighborhoods including:
-- Kreuzberg, Mitte, Prenzlauer Berg
-- Charlottenburg, Friedrichshain, Neukölln
-- Full districts like Charlottenburg-Wilmersdorf
+### Step 1: Geographic Selection
+1. Choose between **Bundesland** (Federal State) or **Bezirk** (District)
+2. Select your area of interest from the dropdown:
+   - **Bundesland**: Berlin (state-wide analysis)
+   - **Bezirk**: Individual Berlin districts (Charlottenburg-Wilmersdorf, Friedrichshain-Kreuzberg, etc.)
 
-### 2. **Set Date Range**
-- Select start and end dates for analysis
-- Recommended: 1-4 weeks for optimal results
-- Maximum: 365 days
+### Step 2: Time Period
+1. Set the start date (default: 01.06.2025)
+2. Set the end date (default: 30.06.2025)
+3. Use the date picker for easy selection
 
-### 3. **Choose Performance Mode**
-- **Preview** (< 30s): Quick overview for initial insights
-- **Fast** (30-60s): Recommended for most use cases
-- **Standard** (1-3 min): Balanced detail and performance
-- **Detailed** (3-10 min): Comprehensive analysis with weather data
+### Step 3: Performance Mode
+Choose the analysis mode based on your needs:
 
-### 4. **Advanced Options**
-- ☑️ Include weather station data (auto-enabled for detailed mode)
-- ☑️ Enable caching for faster repeated analyses
+| Mode | Description | Duration | Resolution | Weather Data |
+|------|-------------|----------|------------|--------------|
+| **Preview** | Quick overview with reduced accuracy | 1-2 min | 300m grid | No |
+| **Fast** | Balanced speed and quality | 3-5 min | 200m grid | No |
+| **Standard** | Standard analysis with good detail | 5-10 min | 100m grid | Yes |
+| **Detailed** | High-resolution with maximum detail | 10-20 min | 50m grid | Yes |
 
-### 5. **Run Analysis**
-Click "Analyse starten" to begin processing. Progress is tracked in real-time with:
-- Step-by-step progress indication
-- Processing time tracking
-- Visual progress bar
+### Step 4: Start Analysis
+1. Click **"Analyse starten"** to begin
+2. Monitor progress with the real-time progress bar
+3. Wait for completion (duration depends on selected mode)
 
-### 6. **View Results**
-**Interactive Map:**
-- Temperature heatmap overlay
-- Hotspot markers with click details
-- Layer controls for different data types
-- Zoom and pan functionality
+### Step 5: Explore Results
 
-**Statistics Dashboard:**
-- Temperature statistics (mean, min, max, std)
-- Hotspot count and intensity
-- Land use correlation analysis
-- Downloadable recommendations
+#### Interactive Map
+- **Temperature Layer**: Color-coded temperature grid (automatically displayed)
+- **Hotspots**: Click to toggle hotspot markers
+- **Weather Stations**: Available in Standard/Detailed modes
+- **Boundary**: Area outline for spatial context
 
-**Charts:**
-- Temperature distribution histogram
-- Land use vs. temperature scatter plot
-- Correlation trend lines
+#### Key Performance Indicators (KPIs)
+- **Hotspots Count**: Number of identified high-temperature areas
+- **Average Temperature**: Mean temperature across the analysis area
+- **Maximum Temperature**: Highest recorded temperature
+- **Recommendations**: Number of generated adaptation strategies
 
-## Technical Features
+#### Charts and Analysis
+- **Temperature Distribution**: Statistical overview of temperature values
+- **Land Use Correlation**: Relationship between land cover types and temperature
+- **Recommendations**: Actionable climate adaptation strategies
 
-### Frontend Technologies
-- **Flask**: Python web framework
-- **Leaflet**: Interactive maps with heatmap support
-- **Chart.js**: Responsive data visualization
-- **Modern CSS**: Grid layouts, animations, responsive design
-- **Progressive Enhancement**: Works with JavaScript disabled
+## API Endpoints
 
-### Backend Integration
-- **Seamless Integration**: Uses existing `backend_example.py` without modifications
-- **Real-time Processing**: Live progress tracking and updates
-- **Error Handling**: Comprehensive error reporting and recovery
-- **Performance Optimization**: Multiple analysis modes for different use cases
+The application provides RESTful API endpoints for programmatic access:
 
-### Map Features
-- **Base Layer**: OpenStreetMap tiles
-- **Heatmap Layer**: Temperature data visualization
-- **Marker Layers**: Hotspots, weather stations, land use
-- **Interactive Controls**: Zoom, pan, layer toggle
-- **Custom Popups**: Detailed information on click
+### GET `/api/areas`
+Get available areas for analysis.
+- **Parameters**: `type` (bundesland|bezirk)
+- **Response**: Array of area names
 
-### Data Visualization
-- **Temperature Heatmaps**: Color-coded temperature distribution
-- **Statistical Charts**: Histogram and scatter plots
-- **Real-time Updates**: Dynamic chart updates during analysis
-- **Export Options**: Chart download functionality
+### POST `/api/analyze`
+Perform UHI analysis.
+- **Request Body**:
+  ```json
+  {
+    "area_type": "bezirk",
+    "area": "Friedrichshain-Kreuzberg",
+    "start_date": "01.06.2025",
+    "end_date": "30.06.2025",
+    "performance_mode": "standard"
+  }
+  ```
+- **Response**: Complete analysis results
 
-## Development
+### GET `/api/progress`
+Get analysis progress (session-based).
+
+### GET `/api/performance-modes`
+Get available performance modes with descriptions.
+
+## Technical Architecture
+
+### Backend Components
+- **Flask Application** (`app.py`): Main web server and API endpoints
+- **Backend Logic** (`backend_logic.py`): UHI analysis engine integration
+- **Settings Configuration**: Centralized configuration management
+
+### Frontend Components
+- **HTML Templates**: Jinja2-based responsive templates
+- **CSS Styling**: Modern CSS with CSS Grid and Flexbox
+- **JavaScript**: Vanilla JS with Leaflet maps and Chart.js visualization
+- **External Libraries**:
+  - Leaflet for interactive mapping
+  - Chart.js for data visualization
+  - Font Awesome for icons
+  - Flatpickr for date selection
+
+### Data Sources
+- **Sentinel-2 Satellite Data**: Temperature and land surface analysis
+- **German Weather Service (DWD)**: Ground truth temperature data
+- **CORINE Land Cover**: European land use classification
+- **Berlin Open Data**: Administrative boundaries and geographic data
+
+## Configuration
 
 ### Environment Variables
-- `UHI_WEBAPP_HOST`: Web application host (default: 127.0.0.1)
-- `UHI_WEBAPP_PORT`: Web application port (default: 8000)
-- `UHI_WEBAPP_DEBUG`: Debug mode (default: true)
+- `SECRET_KEY`: Flask session encryption key
+- `UHI_EARTH_ENGINE_PROJECT`: Google Earth Engine project ID
+- `FLASK_ENV`: Flask environment (development/production)
+- `FLASK_DEBUG`: Enable debug mode
 
-### Customization
-The application is designed for easy customization:
-- **Styling**: Modify `static/css/styles.css` for appearance changes
-- **Map Behavior**: Extend `static/js/map.js` for additional map features
-- **Analysis Logic**: Core analysis remains in `backend/backend_example.py`
-- **UI Components**: Add new components to templates
-
-### Performance Optimization
-- **Caching**: Analysis results can be cached for faster repeated requests
-- **Lazy Loading**: Maps and charts load progressively
-- **Responsive Design**: Optimized for desktop and mobile devices
-- **Efficient Data Processing**: Streaming progress updates
+### Performance Tuning
+Performance modes are configured in `src/uhi_analyzer/config/settings.py`:
+- Grid cell sizes (50m to 300m)
+- Cloud cover thresholds
+- Processing parameters
+- Memory and batch size limits
 
 ## Troubleshooting
 
 ### Common Issues
-1. **Dependencies**: Run `uv sync` to ensure all packages are installed
-2. **Port Conflicts**: Change port using `UHI_WEBAPP_PORT` environment variable
-3. **Browser Issues**: Try clearing cache or using incognito mode
-4. **Analysis Errors**: Check backend logs for detailed error information
 
-### Performance Tips
-- Use "Fast" mode for initial exploration
-- Limit date ranges to 1-4 weeks for optimal performance
-- Enable caching for repeated analyses of the same area
+1. **Import Errors**:
+   ```bash
+   # Ensure dependencies are installed
+   uv sync
+   ```
+
+2. **Google Earth Engine Authentication**:
+   ```bash
+   # Authenticate with GEE
+   earthengine authenticate
+   ```
+
+3. **Port Already in Use**:
+   - Change port in `app.py` or kill existing process
+
+4. **Memory Issues**:
+   - Use Preview or Fast mode for large areas
+   - Check available system memory
+
+### Debug Mode
+For development and troubleshooting:
+```bash
+export FLASK_ENV=development
+export FLASK_DEBUG=1
+uv run python app.py
+```
+
+## Development
+
+### Code Structure
+```
+webapp/
+├── app.py                 # Main Flask application
+├── backend_logic.py       # UHI analysis integration
+├── run_webapp.py         # Startup script
+├── templates/            # HTML templates
+│   ├── index.html       # Main application page
+│   ├── 404.html         # Error pages
+│   └── 500.html
+└── static/              # Static assets
+    ├── css/
+    │   └── style.css    # Main stylesheet
+    └── js/
+        └── app.js       # Frontend JavaScript
+```
+
+### Contributing
+1. Follow Python best practices and PEP 8
+2. Use modern web standards (HTML5, CSS3, ES6+)
+3. Maintain responsive design principles
+4. Add proper error handling and logging
+5. Update documentation for new features
+
+### Testing
+```bash
+# Run backend tests
+uv run pytest
+
+# Test webapp endpoints
+curl http://localhost:5000/api/performance-modes
+```
+
+## License
+
+This project is part of the Urban Heat Island Analyzer suite. See the main project README for license information.
 
 ## Support
 
-For issues or questions:
-1. Check the console output for error messages
-2. Verify all dependencies are installed with `uv sync`
-3. Review the analysis parameters for validity
-4. Check the backend logs for detailed error information
+For technical support or feature requests:
+1. Check the main project documentation
+2. Review the troubleshooting section
+3. Check backend logs for detailed error information
+4. Ensure all dependencies are properly installed
 
-The web application provides a comprehensive, user-friendly interface for urban heat island analysis with professional-grade visualizations and real-time processing capabilities. 
+---
+
+**HeatSense** - Making urban climate data accessible and actionable for everyone. 🌡️🏙️ 

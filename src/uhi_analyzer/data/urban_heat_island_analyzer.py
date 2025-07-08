@@ -4,6 +4,7 @@ import geopandas as gpd
 import pandas as pd
 import libpysal.weights
 import esda
+import warnings
 from typing import Dict, Union, List, Tuple, Optional
 from datetime import datetime, date
 import logging
@@ -211,7 +212,7 @@ class UrbanHeatIslandAnalyzer:
                     "study_period": f"{date_range[0]} to {date_range[1]}",
                     "cloud_threshold": self.cloud_threshold,
                     "grid_cell_size": self.grid_cell_size,
-                    "city_area_km2": city_area.geometry.area.sum() / 1e6
+                    "city_area_km2": self._calculate_area_km2(city_area)
                 },
                 "temperature_statistics": temp_stats,
                 "land_use_correlation": landuse_correlation,
@@ -560,35 +561,62 @@ class UrbanHeatIslandAnalyzer:
             if len(type_data) > 1:  # Need at least 2 points for correlation
                 # Remove NaN values for correlation
                 valid_mask = (~pd.isna(type_data['temperature'])) & (~pd.isna(type_data['impervious_area']))
-                if valid_mask.sum() > 1:
-                    try:
-                        corr, p_value = pearsonr(
-                            type_data[valid_mask]['temperature'],
-                            type_data[valid_mask]['impervious_area']
-                        )
+                valid_temp = type_data[valid_mask]['temperature']
+                valid_imperv = type_data[valid_mask]['impervious_area']
+                
+                if len(valid_temp) > 1:
+                    # Check for constant arrays to avoid ConstantInputWarning
+                    temp_variance = valid_temp.var()
+                    imperv_variance = valid_imperv.var()
+                    
+                    if temp_variance > 1e-10 and imperv_variance > 1e-10:  # Non-constant arrays
+                        try:
+                            corr, p_value = pearsonr(valid_temp, valid_imperv)
+                            correlations[ltype] = {
+                                'correlation': round(corr, 3),
+                                'p_value': round(p_value, 3),
+                                'n_samples': len(valid_temp)
+                            }
+                        except Exception as e:
+                            self.logger.warning(f"Correlation calculation failed for {ltype}: {str(e)}")
+                    else:
+                        # Handle constant arrays gracefully
+                        self.logger.debug(f"Skipping correlation for {ltype}: constant values detected")
                         correlations[ltype] = {
-                            'correlation': round(corr, 3),
-                            'p_value': round(p_value, 3),
-                            'n_samples': valid_mask.sum()
+                            'correlation': 0.0,  # No correlation for constant data
+                            'p_value': 1.0,      # No significance
+                            'n_samples': len(valid_temp),
+                            'note': 'constant_values'
                         }
-                    except Exception as e:
-                        self.logger.warning(f"Correlation calculation failed for {ltype}: {str(e)}")
         
-        # Overall correlation
+        # Overall correlation - also check for constant arrays
         valid_overall = (~pd.isna(joined['temperature'])) & (~pd.isna(joined['impervious_area']))
-        if valid_overall.sum() > 1:
-            try:
-                overall_corr, overall_p = pearsonr(
-                    joined[valid_overall]['temperature'],
-                    joined[valid_overall]['impervious_area']
-                )
+        valid_overall_temp = joined[valid_overall]['temperature']
+        valid_overall_imperv = joined[valid_overall]['impervious_area']
+        
+        if len(valid_overall_temp) > 1:
+            temp_variance = valid_overall_temp.var()
+            imperv_variance = valid_overall_imperv.var()
+            
+            if temp_variance > 1e-10 and imperv_variance > 1e-10:  # Non-constant arrays
+                try:
+                    overall_corr, overall_p = pearsonr(valid_overall_temp, valid_overall_imperv)
+                    correlations['overall'] = {
+                        'correlation': round(overall_corr, 3),
+                        'p_value': round(overall_p, 3),
+                        'n_samples': len(valid_overall_temp)
+                    }
+                except Exception as e:
+                    self.logger.warning(f"Overall correlation calculation failed: {str(e)}")
+            else:
+                # Handle constant arrays gracefully
+                self.logger.debug("Skipping overall correlation: constant values detected")
                 correlations['overall'] = {
-                    'correlation': round(overall_corr, 3),
-                    'p_value': round(overall_p, 3),
-                    'n_samples': valid_overall.sum()
+                    'correlation': 0.0,
+                    'p_value': 1.0,
+                    'n_samples': len(valid_overall_temp),
+                    'note': 'constant_values'
                 }
-            except Exception as e:
-                self.logger.warning(f"Overall correlation calculation failed: {str(e)}")
 
         self.logger.info(f"Land use correlation analysis completed for {len(correlations)} categories")
         
@@ -619,8 +647,17 @@ class UrbanHeatIslandAnalyzer:
             
         self.logger.info("Identifying heat island hotspots")
         
-        # Calculate spatial weights
-        weights = libpysal.weights.Queen.from_dataframe(temp_data, use_index=True)
+        # Calculate spatial weights with warning suppression for disconnected components
+        with warnings.catch_warnings():
+            # Suppress specific warning about disconnected components - this is normal for irregular geometries
+            warnings.filterwarnings("ignore", 
+                                  message="The weights matrix is not fully connected",
+                                  category=UserWarning)
+            weights = libpysal.weights.Queen.from_dataframe(temp_data, use_index=True)
+        
+        # Log information about connectivity
+        if hasattr(weights, 'n_components') and weights.n_components > 1:
+            self.logger.debug(f"Spatial weights matrix has {weights.n_components} disconnected components (normal for irregular boundaries)")
 
         # Calculate local Moran's I
         moran_loc = esda.moran.Moran_Local(
@@ -639,7 +676,13 @@ class UrbanHeatIslandAnalyzer:
             hotspots['cluster_id'] = pd.Series(dtype='int')
             valid_clusters = []
         else:
-            hotspot_weights = libpysal.weights.w_subset(weights, hotspots.index)
+            # Suppress warning for disconnected components in w_subset - normal for hotspot analysis
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", 
+                                      message="The weights matrix is not fully connected",
+                                      category=UserWarning)
+                hotspot_weights = libpysal.weights.w_subset(weights, hotspots.index)
+            
             hotspots['cluster_id'] = self._cluster_hotspots(hotspot_weights)
 
             # Filter small clusters
@@ -832,7 +875,16 @@ class UrbanHeatIslandAnalyzer:
             
             # Calculate correlation
             try:
-                correlation, p_value = pearsonr(ground_temps, satellite_temps_vals)
+                # Check for constant arrays to avoid ConstantInputWarning
+                ground_variance = np.var(ground_temps)
+                satellite_variance = np.var(satellite_temps_vals)
+                
+                if ground_variance > 1e-10 and satellite_variance > 1e-10:  # Non-constant arrays
+                    correlation, p_value = pearsonr(ground_temps, satellite_temps_vals)
+                else:
+                    # Handle constant arrays gracefully
+                    self.logger.warning("Ground or satellite temperature data contains constant values. Cannot calculate correlation.")
+                    correlation, p_value = np.nan, np.nan
             except Exception as e:
                 self.logger.warning(f"Correlation calculation failed: {str(e)}")
                 correlation, p_value = np.nan, np.nan
@@ -879,9 +931,9 @@ class UrbanHeatIslandAnalyzer:
         # Analyze hot spots
         if len(results['hot_spots']) > 0:
             recommendations.append({
-                'strategy': 'hot_spot_mitigation',
-                'type': 'hot_spot_mitigation',
-                'description': 'Increase green coverage in identified hot spots',
+                'strategy': 'Reduktion von Hitzeinseln',
+                'type': 'Reduktion von Hitzeinseln', 
+                'description': 'Erhöhung der Grünflächen in identifizierten Hotspots',
                 'priority': 'high',
                 'locations': results['hot_spots'].geometry.to_json()
             })
@@ -895,8 +947,8 @@ class UrbanHeatIslandAnalyzer:
                 corr = land_use_data['correlations']['impervious_surface']
                 if corr['correlation'] > 0.5:
                     recommendations.append({
-                        'strategy': 'surface_modification',
-                        'description': 'Implement cool roofs and permeable pavements',
+                        'strategy': 'Oberflächenmodifikation',
+                        'description': 'Einführung von kühlen Dächern und wasserdurchlässigen Belägen',
                         'priority': 'medium'
                     })
             
@@ -908,11 +960,26 @@ class UrbanHeatIslandAnalyzer:
                     if isinstance(temp_data, dict) and 'temperature_mean' in temp_data:
                         if temp_data['temperature_mean'] > 30.0:  # Hot areas
                             recommendations.append({
-                                'strategy': 'green_infrastructure',
-                                'description': f'Increase vegetation in {landuse_type} areas',
+                                'strategy': 'Grüne Infrastruktur',
+                                'description': f'Erhöhung der Vegetation in {landuse_type}-Gebieten',
                                 'priority': 'high'
                             })
 
         self.logger.info(f"Generated {len(recommendations)} mitigation recommendations")
         return recommendations
+
+    def _calculate_area_km2(self, gdf: gpd.GeoDataFrame) -> float:
+        """Calculate the area of a GeoDataFrame in square kilometers."""
+        # Ensure the GeoDataFrame is in a projected CRS for accurate area calculation
+        if gdf.crs is None or gdf.crs.is_geographic:
+            gdf = gdf.to_crs(CRS_CONFIG["WEB_MERCATOR"])
+        
+        # Calculate the total area in square meters
+        total_area_m2 = gdf.geometry.area.sum()
+        
+        # Convert to square kilometers
+        total_area_km2 = total_area_m2 / 1e6
+        
+        self.logger.info(f"Calculated total area: {total_area_km2:.2f} km²")
+        return total_area_km2
 

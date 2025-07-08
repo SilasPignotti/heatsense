@@ -85,11 +85,6 @@ DWD_TEMPERATURE_PARAMETERS = [("hourly", "temperature_air", "temperature_air_mea
 # Performance Configuration
 # =============================================================================
 
-# Central Cache Configuration
-UHI_CACHE_DIR = Path(__file__).parent.parent / "webapp" / "backend" / "cache"  # Central cache directory
-UHI_CACHE_MAX_AGE_DAYS = 30  # Maximum age for cached items
-UHI_CACHE_MAX_SIZE_GB = 5.0  # Maximum total cache size in GB
-
 # Performance Modes for different use cases (KEEP - used by calling functions)
 UHI_PERFORMANCE_MODES = {
     # Webapp preview mode - fast but lower resolution
@@ -101,7 +96,6 @@ UHI_PERFORMANCE_MODES = {
         "skip_temporal_trends": True,    # Skip time-consuming temporal analysis
         "max_pixels": 5e8,              # Reduced pixel limit
         "batch_size": 1000,             # Smaller batches
-        "use_fast_analyzer": False        # Use FastUrbanHeatIslandAnalyzer
     },
     
     # Fast mode - balanced speed and quality
@@ -110,10 +104,9 @@ UHI_PERFORMANCE_MODES = {
         "cloud_cover_threshold": 30,     # Balanced cloud filtering
         "hotspot_threshold": 0.9,        # Standard threshold
         "min_cluster_size": 5,           # Standard clusters
-        "skip_temporal_trends": False,   # Include temporal analysis
+        "skip_temporal_trends": True,   # Skip time-consuming temporal analysis
         "max_pixels": 1e9,              # Standard pixel limit
         "batch_size": 3000,             # Medium batches
-        "use_fast_analyzer": False        # Use FastUrbanHeatIslandAnalyzer
     },
     
     # Standard mode - default settings
@@ -122,10 +115,9 @@ UHI_PERFORMANCE_MODES = {
         "cloud_cover_threshold": 20,     # Standard cloud filtering
         "hotspot_threshold": 0.9,        # Standard threshold
         "min_cluster_size": 5,           # Standard clusters
-        "skip_temporal_trends": False,   # Include temporal analysis
+        "skip_temporal_trends": True,   # Skip time-consuming temporal analysis
         "max_pixels": 1e9,              # Standard pixel limit
         "batch_size": 5000,             # Standard batches
-        "use_fast_analyzer": False       # Use regular analyzer for comparison
     },
     
     # High quality mode - detailed analysis
@@ -134,10 +126,9 @@ UHI_PERFORMANCE_MODES = {
         "cloud_cover_threshold": 20,     # Reasonable cloud filtering
         "hotspot_threshold": 0.95,       # High threshold
         "min_cluster_size": 10,          # Larger minimum clusters
-        "skip_temporal_trends": False,   # Include temporal analysis
+        "skip_temporal_trends": True,   # Skip time-consuming temporal analysis
         "max_pixels": 2e9,              # Higher pixel limit
         "batch_size": 2000,             # Smaller batches for precision
-        "use_fast_analyzer": False       # Use regular analyzer for highest quality
     }
 }
 
