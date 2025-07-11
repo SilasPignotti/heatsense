@@ -34,7 +34,7 @@ import geopandas as gpd
 from uhi_analyzer.data.wfs_downloader import WFSDataDownloader
 from uhi_analyzer.data.corine_downloader import CorineDataDownloader
 from uhi_analyzer.data.dwd_downloader import DWDDataDownloader
-from uhi_analyzer.utils.analyzer_factory import create_analyzer
+from uhi_analyzer.data.urban_heat_island_analyzer import UrbanHeatIslandAnalyzer
 from uhi_analyzer.config.settings import (
     BERLIN_WFS_ENDPOINTS,
     BERLIN_WFS_FEATURE_TYPES,
@@ -350,12 +350,23 @@ class UHIAnalysisBackend:
             return None
     
     def _create_analyzer(self, performance_mode: str):
-        """Create optimized analyzer using the new factory approach."""
+        """Create analyzer directly with performance mode configuration."""
 
-        # Use the new factory approach for smart analyzer selection
-        analyzer = create_analyzer(
-            performance_mode=performance_mode
-        )
+        if performance_mode not in UHI_PERFORMANCE_MODES:
+            raise ValueError(f"Invalid performance mode: {performance_mode}")
+        
+        mode_config = UHI_PERFORMANCE_MODES[performance_mode]
+        
+        # Apply mode defaults
+        analyzer_kwargs = {
+            'cloud_cover_threshold': mode_config.get('cloud_cover_threshold', 20),
+            'grid_cell_size': mode_config.get('grid_cell_size', 100),
+            'hotspot_threshold': mode_config.get('hotspot_threshold', 0.9),
+            'min_cluster_size': mode_config.get('min_cluster_size', 5),
+            'skip_temporal_trends': mode_config.get('skip_temporal_trends', False),
+        }
+        
+        analyzer = UrbanHeatIslandAnalyzer(**analyzer_kwargs)
         
         analyzer_type = type(analyzer).__name__
         self.logger.info(f"🚀 Created {analyzer_type} with {performance_mode} mode")

@@ -190,7 +190,6 @@ def analyze():
         data = request.get_json()
         
         # Extract parameters
-        area_type = data.get('area_type', 'bezirk')
         area = data.get('area')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
