@@ -1013,13 +1013,6 @@ function showInfo() {
 }
 
 /**
- * Show privacy modal (placeholder)
- */
-function showPrivacy() {
-    alert('Datenschutz-Information würde hier angezeigt werden.');
-}
-
-/**
  * Close modal
  */
 function closeModal(modalId) {
@@ -1166,12 +1159,14 @@ function downloadResults() {
 
 
 // Export functions for global access
+window.selectAreaType = selectAreaType;
 window.updateAreaDropdown = updateAreaDropdown;
 window.startAnalysis = startAnalysis;
+window.toggleBoundaryLayer = toggleBoundaryLayer;
 window.toggleTemperatureLayer = toggleTemperatureLayer;
 window.toggleHotspotsLayer = toggleHotspotsLayer;
 window.toggleWeatherStations = toggleWeatherStations;
+window.toggleLanduseLayer = toggleLanduseLayer;
 window.showInfo = showInfo;
-window.showPrivacy = showPrivacy;
 window.closeModal = closeModal;
 window.downloadResults = downloadResults; 

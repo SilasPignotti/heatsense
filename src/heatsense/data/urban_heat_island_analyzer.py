@@ -848,48 +848,238 @@ class UrbanHeatIslandAnalyzer:
             }
 
     def _generate_recommendations(self, results: Dict) -> List[Dict]:
-        """Generate mitigation recommendations based on analysis results."""
-        self.logger.info("Generating mitigation recommendations")
+        """Generate comprehensive mitigation recommendations based on analysis results."""
+        self.logger.info("Generating comprehensive mitigation recommendations")
         recommendations = []
-
-        # Analyze hot spots
-        if len(results['hot_spots']) > 0:
+        
+        hotspots = results.get('hot_spots', gpd.GeoDataFrame())
+        landuse_correlation = results.get('land_use_correlation', {})
+        
+        if hotspots.empty:
             recommendations.append({
-                'strategy': 'Reduktion von Hitzeinseln',
-                'type': 'Reduktion von Hitzeinseln', 
-                'description': 'Erhöhung der Grünflächen in identifizierten Hotspots',
-                'priority': 'high',
-                'locations': results['hot_spots'].geometry.to_json()
+                'strategy': 'Präventive Maßnahmen',
+                'description': 'Keine akuten Hitzeinseln identifiziert. Empfehlung für präventive Stadtbegrünung zur langfristigen Vermeidung von Wärmeinseln.',
+                'priority': 'low',
+                'category': 'prevention'
             })
+            return recommendations
+        
+        # A) Größenbasierte Strategien
+        size_recommendations = self._generate_size_based_recommendations(hotspots)
+        recommendations.extend(size_recommendations)
+        
+        # B) Intensitätsbasierte Priorisierung  
+        intensity_recommendations = self._generate_intensity_based_recommendations(hotspots)
+        recommendations.extend(intensity_recommendations)
+        
+        # C) Landnutzungs-spezifische Empfehlungen
+        landuse_recommendations = self._generate_landuse_specific_recommendations(hotspots, results)
+        recommendations.extend(landuse_recommendations)
+        
+        # D) Korrelationsbasierte Strategien
+        correlation_recommendations = self._generate_correlation_based_recommendations(landuse_correlation)
+        recommendations.extend(correlation_recommendations)
+        
+        self.logger.info(f"Generated {len(recommendations)} comprehensive mitigation recommendations")
+        return recommendations
 
-        # Analyze land use correlations
-        if 'land_use_correlation' in results and results['land_use_correlation']:
-            land_use_data = results['land_use_correlation']
+    def _generate_size_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> List[Dict]:
+        """Generate recommendations based on hotspot cluster sizes (number of grid cells)."""
+        recommendations = []
+        
+        if hotspots.empty:
+            return recommendations
+        
+        # Analysiere Cluster-Größen basierend auf räumlicher Nähe
+        # Da Hotspots aus einem Grid stammen, nutzen wir die Anzahl der zusammenhängenden Zellen
+        total_hotspots = len(hotspots)
+        
+        # Schätze Cluster-Größen basierend auf der Hotspot-Verteilung
+        # Bei sehr wenigen Hotspots -> vermutlich einzelne Zellen (klein)
+        # Bei moderater Anzahl -> vermutlich kleinere Cluster (mittel) 
+        # Bei vielen Hotspots -> vermutlich größere zusammenhängende Bereiche (groß)
+        
+        if total_hotspots <= 5:
+            # Wenige isolierte Hotspots -> Mikro-Interventionen
+            recommendations.append({
+                'strategy': 'Punktuelle Kühlungsmaßnahmen',
+                'description': f'{total_hotspots} isolierte Hitzezellen identifiziert. Gezielte Einzelmaßnahmen: Schattenspendende Bäume, kleine Grüninseln und vertikale Begrünungselemente für lokale Abkühlung.',
+                'priority': 'medium',
+                'category': 'micro_interventions',
+                'affected_areas': total_hotspots
+            })
             
-            # Check if we have correlations data
-            if 'correlations' in land_use_data and 'impervious_surface' in land_use_data['correlations']:
-                corr = land_use_data['correlations']['impervious_surface']
-                if corr['correlation'] > 0.5:
-                    recommendations.append({
-                        'strategy': 'Oberflächenmodifikation',
-                        'description': 'Einführung von kühlen Dächern und wasserdurchlässigen Belägen',
-                        'priority': 'medium'
-                    })
+        elif total_hotspots <= 20:
+            # Moderate Anzahl -> kleinere Cluster, Quartiersansätze
+            avg_cluster_size = total_hotspots // max(1, total_hotspots // 5)  # Geschätzte Cluster
+            recommendations.append({
+                'strategy': 'Nachbarschafts-Kühlungskonzept',
+                'description': f'{total_hotspots} Hitzezellen in ca. {total_hotspots // max(1, avg_cluster_size)} Quartiersbereichen lokalisiert. Integrierte Nachbarschaftslösungen: Grüne Nachbarschaftsplätze, extensive Dachbegrünung und klimaresiliente Straßenraumgestaltung.',
+                'priority': 'high',
+                'category': 'neighborhood_interventions', 
+                'affected_areas': total_hotspots
+            })
             
-            # Check if we have statistics data (alternative format)
-            elif 'statistics' in land_use_data:
-                stats = land_use_data['statistics']
-                # Look for high temperature land use types
-                for landuse_type, temp_data in stats.items():
-                    if isinstance(temp_data, dict) and 'temperature_mean' in temp_data:
-                        if temp_data['temperature_mean'] > 30.0:  # Hot areas
-                            recommendations.append({
-                                'strategy': 'Grüne Infrastruktur',
-                                'description': f'Erhöhung der Vegetation in {landuse_type}-Gebieten',
-                                'priority': 'high'
-                            })
+        else:
+            # Viele Hotspots -> größere zusammenhängende Bereiche
+            estimated_clusters = max(1, total_hotspots // 10)  # Geschätzte große Cluster
+            recommendations.append({
+                'strategy': 'Stadtweite Kühlanlagen-Infrastruktur',
+                'description': f'{total_hotspots} Hitzezellen in ca. {estimated_clusters} Großbereichen konzentriert. Strategische Großmaßnahmen erforderlich: Vernetzte Grünkorridore, urbane Wasserlandschaften und großflächige Verschattungsstrukturen.',
+                'priority': 'critical',
+                'category': 'strategic_interventions',
+                'affected_areas': total_hotspots
+            })
+            
+        # Zusätzliche Empfehlung basierend auf Hotspot-Dichte
+        if total_hotspots > 50:
+            recommendations.append({
+                'strategy': 'Integriertes Stadtklima-Managementsystem',
+                'description': f'Kritische Überhitzung mit {total_hotspots} Hitzezellen erfordert koordinierte Gesamtstrategie. Sofortiges Handeln: Multifaktorielle Kühlungsapproach mit vernetzten Grün-Blau-Infrastrukturen und klimaadaptivem Stadtdesign.',
+                'priority': 'critical',
+                'category': 'city_wide_cooling',
+                'affected_areas': total_hotspots
+            })
+            
+        return recommendations
 
-        self.logger.info(f"Generated {len(recommendations)} mitigation recommendations")
+    def _generate_intensity_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> List[Dict]:
+        """Generate recommendations based on temperature intensity."""
+        recommendations = []
+        
+        if hotspots.empty or 'temperature' not in hotspots.columns:
+            return recommendations
+        
+        temperatures = hotspots['temperature']
+        mean_temp = temperatures.mean()
+        
+        weak_hotspots = len(temperatures[temperatures < mean_temp + 1])
+        strong_hotspots = len(temperatures[temperatures >= mean_temp + 1])
+        
+        if weak_hotspots > 0:
+            recommendations.append({
+                'strategy': 'Moderate Hitzeregulierung',
+                'description': f'{weak_hotspots} Bereiche mit moderater Überwärmung identifiziert. Kosteneffektive Sofortmaßnahmen: Aufhellung von Oberflächen, strategische Verschattungselemente und gezielte Neupflanzungen zur Temperaturstabilisierung.',
+                'priority': 'medium',
+                'category': 'prevention',
+                'affected_areas': weak_hotspots
+            })
+            
+        if strong_hotspots > 0:
+            recommendations.append({
+                'strategy': 'Intensive Hitzeminderungsmaßnahmen',
+                'description': f'{strong_hotspots} kritische Überhitzungsbereiche (>{mean_temp + 1:.1f}°C) erfordern umgehende Intervention. Mehrschichtige Kühlung: Kombinationsstrategie aus intensiver Begrünung, Wasserelementen zur Verdunstungskühlung und großflächiger Verschattung.',
+                'priority': 'critical',
+                'category': 'acute_intervention',
+                'affected_areas': strong_hotspots
+            })
+            
+        return recommendations
+
+    def _generate_landuse_specific_recommendations(self, hotspots: gpd.GeoDataFrame, results: Dict) -> List[Dict]:
+        """Generate recommendations based on dominant land use in hotspot areas."""
+        recommendations = []
+        
+        # Landnutzungs-spezifische Empfehlungsmatrix
+        landuse_strategies = {
+            'dichte_bebauung': {
+                'strategy': 'Verdichtete Stadtgebiete klimaresistent gestalten',
+                'description': 'Hochversiegelte Innenstadt-Bereiche: Intensive Dach- und Fassadenbegrünung, klimaoptimierte Baumaterialien mit hoher Albedo, vertikale Gartensysteme und mikroklimatische Kühlzonen schaffen.',
+                'priority': 'critical'
+            },
+            'wohngebiete': {
+                'strategy': 'Wohnquartiere klimaadaptiv optimieren',
+                'description': 'Überhitzte Wohnbereiche: Straßenbegleitende Baumalleen, Förderung privater Gartenbegrünung, Entsiegelung von Innenhöfen und Installation von Wasserspielen zur Verdunstungskühlung.',
+                'priority': 'high'
+            },
+            'industrie': {
+                'strategy': 'Gewerbeflächen thermisch optimieren',
+                'description': 'Industriestandorte mit Überhitzung: Großflächige extensive Dachbegrünung, wasserdurchlässige Oberflächengestaltung von Betriebsflächen und industriespezifische Verschattungsanlagen implementieren.',
+                'priority': 'high'
+            },
+            'verkehrsflaechen': {
+                'strategy': 'Verkehrsinfrastruktur klimaoptimiert umgestalten',
+                'description': 'Überhitzte Verkehrsbereiche: Intensives Straßenbegleitgrün, thermisch optimierte helle Fahrbahnbeläge und systematische Baumalleen entlang von Hauptverkehrsadern etablieren.',
+                'priority': 'medium'
+            },
+            'staedtisches_gruen': {
+                'strategy': 'Bestehende Grünflächen klimafunktional stärken',
+                'description': 'Unterperformende Grünbereiche: Bewässerungsintensivierung für optimale Verdunstungskühlung, Nachpflanzung schattenspendender Großbäume und Integration zusätzlicher Wasserflächen zur Mikroklima-Verbesserung.',
+                'priority': 'low'
+            }
+        }
+        
+        # Analysiere verfügbare Landnutzungsdaten
+        landuse_data = results.get('raw_landcover_data')
+        if landuse_data is not None and not landuse_data.empty and 'landuse_type' in landuse_data.columns:
+            # Finde dominante Landnutzung in Hotspot-Gebieten  
+            dominant_landuses = landuse_data['landuse_type'].value_counts().head(3)
+            
+            for landuse, count in dominant_landuses.items():
+                if landuse in landuse_strategies:
+                    strategy = landuse_strategies[landuse].copy()
+                    strategy['description'] += f' (Betrifft {count} identifizierte Flächeneinheiten)'
+                    strategy['category'] = 'landuse_specific'
+                    strategy['landuse_type'] = landuse
+                    recommendations.append(strategy)
+        
+        return recommendations
+
+    def _generate_correlation_based_recommendations(self, landuse_correlation: Dict) -> List[Dict]:
+        """Generate recommendations based on land use temperature correlations."""
+        recommendations = []
+        
+        correlations = landuse_correlation.get('correlations', {})
+        
+        # Suche nach hoher Korrelation zwischen Versiegelung und Temperatur
+        high_correlation_found = False
+        
+        for category, correlation_data in correlations.items():
+            if isinstance(correlation_data, dict) and 'correlation' in correlation_data:
+                correlation_value = correlation_data['correlation']
+                
+                # Hohe positive Korrelation mit Temperatur -> wärmend
+                if correlation_value > 0.6:
+                    if category in ['dichte_bebauung', 'verkehrsflaechen', 'industrie']:
+                        recommendations.append({
+                            'strategy': 'Evidenzbasierte Entsiegelungsstrategie',
+                            'description': f'Statistisch signifikante Überhitzungskorrelation bei {category} (r={correlation_value:.2f}). Datengestützte Priorität: Systematische Flächenentsiegelung und Implementierung reflektierender Materialsysteme.',
+                            'priority': 'critical',
+                            'category': 'desealing',
+                            'correlation_strength': correlation_value,
+                            'landuse_type': category
+                        })
+                        high_correlation_found = True
+                
+                # Starke negative Korrelation -> kühlend, erhalten/verstärken
+                elif correlation_value < -0.4:
+                    if category in ['wald', 'wasser', 'staedtisches_gruen']:
+                        # Bessere Kategoriebeschreibung
+                        category_names = {
+                            'wald': 'natürlichen Vegetationsflächen und Waldgebieten',
+                            'wasser': 'Gewässerflächen und Wasserlandschaften', 
+                            'staedtisches_gruen': 'städtischen Grünflächen und Parkanlagen'
+                        }
+                        category_display = category_names.get(category, category)
+                        
+                        recommendations.append({
+                            'strategy': 'Bewährte Kühlungsressourcen systematisch ausbauen',
+                            'description': f'Nachgewiesene Kühlungsleistung bei {category_display} (r={correlation_value:.2f}). Strategische Empfehlung: Schutz und zielgerichtete Flächenerweiterung dieser klimawirksamen Strukturen.',
+                            'priority': 'high',
+                            'category': 'cooling_enhancement',
+                            'correlation_strength': abs(correlation_value),
+                            'landuse_type': category
+                        })
+        
+        # Fallback-Empfehlung wenn keine starken Korrelationen gefunden
+        if not high_correlation_found and correlations:
+            recommendations.append({
+                'strategy': 'Multifaktorielle Klimaanpassungsstrategie',
+                'description': 'Moderate Temperaturzusammenhänge in verschiedenen Landnutzungstypen identifiziert. Ausgewogener Lösungsansatz: Integrierte Kombination aus strategischer Begrünung, mikroklimatischer Verschattung und thermischer Oberflächenoptimierung.',
+                'priority': 'medium',
+                'category': 'integrated_cooling'
+            })
+        
         return recommendations
 
     def _calculate_area_km2(self, gdf: gpd.GeoDataFrame) -> float:
