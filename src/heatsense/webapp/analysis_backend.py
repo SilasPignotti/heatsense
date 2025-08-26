@@ -38,6 +38,11 @@ from heatsense.data.wfs_downloader import WFSDataDownloader
 from heatsense.data.corine_downloader import CorineDataDownloader
 from heatsense.data.dwd_downloader import DWDDataDownloader
 from heatsense.data.urban_heat_island_analyzer import UrbanHeatIslandAnalyzer
+from heatsense.utils.data_processor import (
+    process_corine_for_uhi,
+    CORINE_UHI_CATEGORIES,
+    CORINE_UHI_DESCRIPTIONS
+)
 from heatsense.config.settings import (
     BERLIN_WFS_ENDPOINTS,
     BERLIN_WFS_FEATURE_TYPES,
@@ -555,14 +560,12 @@ class UHIAnalysisBackend:
                 if boundary_data is not None:
                     landcover_data = gpd.overlay(landcover_data, boundary_data, how='intersection')
                 
-                # Map CORINE fields to standardized names for frontend
+                # Process landcover data using unified classification system
                 if not landcover_data.empty:
                     # Debug: Log available columns
                     self.logger.info(f"Available landcover columns: {list(landcover_data.columns)}")
-                    if not landcover_data.empty:
-                        self.logger.info(f"Sample data: {landcover_data.iloc[0].to_dict()}")
                     
-                    # Find the code column (prioritize newer years, check both cases)
+                    # Find the code column and rename to corine_code for consistency
                     code_cols = ['Code_18', 'CODE_18', 'corine_code', 'Code_12', 'CODE_12', 'Code_06', 'CODE_06', 'CODE_00', 'CODE_90', 'gridcode', 'GRIDCODE']
                     code_col = None
                     for col in code_cols:
@@ -572,50 +575,29 @@ class UHIAnalysisBackend:
                             break
                     
                     if code_col:
-                        landcover_data['land_use_type'] = landcover_data[code_col].astype(str)
-                        self.logger.info(f"Sample CORINE codes: {landcover_data['land_use_type'].unique()[:10]}")
+                        # Ensure CORINE codes are integers for processing
+                        landcover_data['corine_code'] = landcover_data[code_col].astype(int)
+                        self.logger.info(f"Sample CORINE codes: {sorted(landcover_data['corine_code'].unique()[:10])}")
                         
-                        # Add imperviousness coefficient based on CORINE codes
-                        imperviousness_map = {
-                            '111': 0.9,  # Continuous urban fabric
-                            '112': 0.6,  # Discontinuous urban fabric
-                            '121': 0.8,  # Industrial or commercial units
-                            '122': 0.7,  # Road and rail networks
-                            '123': 0.8,  # Port areas
-                            '124': 0.7,  # Airports
-                            '131': 0.3,  # Mineral extraction sites
-                            '132': 0.4,  # Dump sites
-                            '133': 0.5,  # Construction sites
-                            '141': 0.2,  # Green urban areas
-                            '142': 0.1,  # Sport and leisure facilities
-                        }
-                        
-                        landcover_data['impervious_coefficient'] = landcover_data[code_col].astype(str).map(imperviousness_map).fillna(0.05)
-                        
-                        # Create descriptive land use names
-                        landuse_names = {
-                            '111': 'Geschlossene Bebauung',
-                            '112': 'Offene Bebauung',
-                            '121': 'Industrie/Gewerbe',
-                            '122': 'Verkehrsflächen',
-                            '123': 'Hafenanlagen',
-                            '124': 'Flughäfen',
-                            '131': 'Bergbau',
-                            '132': 'Deponien',
-                            '133': 'Baustellen',
-                            '141': 'Städtisches Grün',
-                            '142': 'Sport/Freizeitanlagen',
-                            '211': 'Ackerflächen',
-                            '231': 'Wiesen und Weiden',
-                            '311': 'Laubwälder',
-                            '312': 'Nadelwälder',
-                            '313': 'Mischwälder',
-                            '324': 'Wald-Strauch-Übergangsstadien',
-                            '511': 'Wasserläufe',
-                            '512': 'Wasserflächen'
-                        }
-                        
-                        landcover_data['land_use_description'] = landcover_data[code_col].astype(str).map(landuse_names).fillna('Sonstige Landnutzung')
+                        # Process using unified classification system
+                        try:
+                            landcover_data = process_corine_for_uhi(
+                                landcover_data, 
+                                logger=self.logger,
+                                group_landuse=True,  # Use grouped categories for better correlation analysis
+                                add_german_descriptions=True  # Add unified German descriptions
+                            )
+                            
+                            # Rename for frontend compatibility
+                            landcover_data['impervious_coefficient'] = landcover_data['impervious_area']
+                            landcover_data['land_use_type'] = landcover_data['landuse_type']
+                            
+                        except Exception as e:
+                            self.logger.warning(f"Failed to process CORINE data with unified system: {e}")
+                            # Fallback to minimal processing
+                            landcover_data['land_use_type'] = 'unknown'
+                            landcover_data['impervious_coefficient'] = 0.3
+                            landcover_data['land_use_description'] = 'Unbekannte Landnutzung'
                     else:
                         self.logger.warning(f"No CORINE code column found. Available columns: {list(landcover_data.columns)}")
                         # Fallback: use generic values

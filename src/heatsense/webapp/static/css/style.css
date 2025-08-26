@@ -759,7 +759,7 @@ a:hover {
 
 .kpis-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
@@ -773,6 +773,8 @@ a:hover {
     align-items: center;
     gap: var(--spacing-md);
     transition: var(--transition);
+    min-width: 220px;
+    flex-shrink: 0;
 }
 
 .kpi-card:hover {
@@ -811,6 +813,122 @@ a:hover {
 }
 
 
+
+
+/* =============================================================================
+   Land Use Correlation Chart
+   ============================================================================= */
+
+.correlation-chart-section {
+    background: var(--white);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.correlation-chart-section h4 {
+    color: var(--near-black);
+    margin-bottom: var(--spacing-sm);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.chart-description {
+    color: var(--dark-gray);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm);
+    background: var(--light-gray);
+    border-radius: var(--radius-sm);
+}
+
+.correlation-chart {
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Horizontal bar chart with centered zero line */
+.correlation-bar-horizontal {
+    display: grid;
+    grid-template-columns: 200px 1fr 80px;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.correlation-bar-horizontal:last-child {
+    border-bottom: none;
+}
+
+.correlation-bar-horizontal:hover {
+    background: rgba(0,0,0,0.02);
+    border-radius: var(--radius-sm);
+}
+
+.correlation-label-horizontal {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--near-black);
+    text-align: right;
+    padding-right: var(--spacing-sm);
+}
+
+.correlation-chart-container {
+    position: relative;
+    height: 24px;
+    background: #f8f9fa;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.correlation-zero-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #343a40;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.correlation-bar-horizontal-fill {
+    height: 100%;
+    transition: all 0.8s ease;
+    position: relative;
+    z-index: 1;
+    opacity: 0.9;
+}
+
+.correlation-bar-horizontal-fill:hover {
+    opacity: 1;
+}
+
+.correlation-bar-horizontal-fill.positive {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.correlation-bar-horizontal-fill.negative {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.correlation-value-horizontal {
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--near-black);
+    font-family: 'Courier New', monospace;
+}
+
+/* Old correlation styles - keep for backward compatibility but hide */
+.correlation-bar, .correlation-label, .correlation-bar-container, .correlation-bar-fill, .correlation-value {
+    display: none !important;
+}
 
 /* =============================================================================
    Recommendations
@@ -904,14 +1022,17 @@ a:hover {
 
 .modal-content {
     background-color: var(--white);
-    margin: 5% auto;
+    margin: 2% auto;
     padding: var(--spacing-xxl);
     border-radius: 12px;
     width: 90%;
-    max-width: 600px;
+    max-width: 800px;
+    max-height: 90vh;
     position: relative;
     animation: modalSlideIn 0.3s ease;
     box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 @keyframes modalSlideIn {

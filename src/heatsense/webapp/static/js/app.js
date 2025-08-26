@@ -90,13 +90,13 @@ async function loadPerformanceModes() {
         const orderedModes = ['preview', 'fast', 'standard', 'detailed'];
         orderedModes.forEach((modeKey, index) => {
             if (modes[modeKey]) {
-                const modeElement = createPerformanceModeElement(modeKey, modes[modeKey], modeKey === 'fast'); // Default to 'fast'
+                const modeElement = createPerformanceModeElement(modeKey, modes[modeKey], modeKey === 'standard'); // Default to 'standard'
                 container.appendChild(modeElement);
             }
         });
         
         // Set default selection
-        appState.currentPerformanceMode = 'fast';
+        appState.currentPerformanceMode = 'standard';
         
     } catch (error) {
         console.error('Error loading performance modes:', error);
@@ -403,6 +403,14 @@ function displayAnalysisResults(result) {
     }
     
     try {
+        // Display correlation chart
+        console.log('Displaying correlation chart...');
+        displayCorrelationChart(data);
+    } catch (error) {
+        console.error('Error displaying correlation chart:', error);
+    }
+    
+    try {
         // Fit map to data bounds if available
         console.log('Fitting map to bounds...');
         fitMapToBounds(data);
@@ -443,6 +451,9 @@ function updateKPIs(data) {
         maxTemp: maxTemp,
         recommendations: recommendationsCount
     });
+    
+    console.log('Full summary object:', summary);
+    console.log('Full data object:', data);
 }
 
 /**
@@ -567,15 +578,16 @@ function getTemperatureColor(temperature) {
 }
 
 /**
- * Get land use color based on imperviousness coefficient
+ * Get land use color based on unified classification system
  */
 function getLanduseColor(imperviousness) {
-    if (imperviousness > 0.8) return '#8b4513';      // High density urban (brown)
-    if (imperviousness > 0.4) return '#cd853f';      // Low density urban (light brown) 
-    if (imperviousness > 0.1) return '#9acd32';      // Urban green (yellow green)
-    if (imperviousness > 0.03) return '#228b22';     // Agricultural (forest green)
-    if (imperviousness > 0.005) return '#006400';    // Natural vegetation (dark green)
-    return '#4169e1';                                 // Water and natural (blue)
+    // Updated colors to match unified classification system
+    if (imperviousness >= 0.8) return '#8b0000';     // High density urban (dark red) - 0.88
+    if (imperviousness >= 0.4) return '#cd853f';     // Low density urban (light brown) - 0.56  
+    if (imperviousness >= 0.15) return '#9acd32';    // Urban green (yellow green) - 0.18
+    if (imperviousness >= 0.03) return '#ffd700';    // Agricultural (gold) - 0.04
+    if (imperviousness >= 0.005) return '#228b22';   // Natural vegetation (forest green) - 0.01
+    return '#4169e1';                                 // Water and natural (blue) - 0.02
 }
 
 /**
@@ -816,6 +828,129 @@ function displayRecommendations(data) {
     });
     
     console.log(`Displayed ${strategies.length} recommendations`);
+}
+
+/**
+ * Display correlation chart for land use categories
+ */
+function displayCorrelationChart(data) {
+    console.log('Displaying correlation chart with data:', data);
+    
+    const container = document.getElementById('correlation-chart');
+    const section = document.getElementById('correlation-chart-section');
+    
+    if (!container || !section) {
+        console.warn('Correlation chart containers not found');
+        return;
+    }
+    
+    // Clear existing content
+    container.innerHTML = '';
+    
+    const landUseCorrelation = data.landuse_correlation;
+    console.log('Land use correlation object:', landUseCorrelation);
+    
+    if (!landUseCorrelation || !landUseCorrelation.correlations) {
+        console.warn('No land use correlation data available');
+        section.style.display = 'none';
+        return;
+    }
+    
+    // Get category correlations from backend (already processed and in German)
+    const allCorrelations = landUseCorrelation.correlations || {};
+    console.log('All correlations from backend:', allCorrelations);
+    
+    // Filter out 'overall' correlation to get only category correlations
+    const categoryCorrelations = {};
+    const categoryDescriptions = landUseCorrelation.category_descriptions || {};
+    
+    Object.keys(allCorrelations).forEach(key => {
+        if (key !== 'overall' && key !== 'unknown' && key !== 'unbekannt') {
+            // Extract the correlation value from the object
+            const correlationObj = allCorrelations[key];
+            if (correlationObj && typeof correlationObj === 'object' && 'correlation' in correlationObj) {
+                categoryCorrelations[key] = correlationObj.correlation;
+            } else if (typeof correlationObj === 'number') {
+                categoryCorrelations[key] = correlationObj;
+            }
+        }
+    });
+    
+    console.log('Category correlations:', categoryCorrelations);
+    console.log('Category descriptions:', categoryDescriptions);
+    
+    if (Object.keys(categoryCorrelations).length === 0) {
+        console.warn('No category correlations found');
+        section.style.display = 'none';
+        return;
+    }
+    
+    // Simplified two-color temperature effect palette
+    const TEMP_EFFECT_COLORS = {
+        warming: "#FF6B35",     // Orange für wärmende Effekte
+        cooling: "#4A90E2",     // Blau für kühlende Effekte
+        neutral: "#E8E8E8"      // Hellgrau für neutrale Effekte
+    };
+    
+    // Function to get color based on temperature effect
+    function getTemperatureEffectColor(effectValue) {
+        const absValue = Math.abs(effectValue);
+        if (absValue < 0.05) return TEMP_EFFECT_COLORS.neutral;
+        return effectValue > 0 ? TEMP_EFFECT_COLORS.warming : TEMP_EFFECT_COLORS.cooling;
+    }
+    
+    // Sort categories by correlation strength (strongest warming effect first)
+    const sortedCategories = Object.entries(categoryCorrelations)
+        .filter(([category, correlation]) => !isNaN(parseFloat(correlation)))
+        .sort(([,a], [,b]) => parseFloat(b) - parseFloat(a));
+    
+    // Create horizontal bar chart with centered zero line
+    sortedCategories.forEach(([category, correlation]) => {
+        const correlationValue = parseFloat(correlation);
+        
+        const barElement = document.createElement('div');
+        barElement.className = 'correlation-bar-horizontal';
+        
+        const label = categoryDescriptions[category] || category;
+        const absValue = Math.abs(correlationValue);
+        const barWidth = Math.min(absValue * 50, 50); // Scale to 50% max (half of container)
+        const isPositive = correlationValue >= 0;
+        const color = getTemperatureEffectColor(correlationValue);
+        
+        // Add tooltip with thermal interpretation
+        let interpretation = '';
+        if (isPositive) {
+            if (absValue >= 0.7) interpretation = 'Starker Wärmeeffekt';
+            else if (absValue >= 0.4) interpretation = 'Mäßiger Wärmeeffekt';
+            else if (absValue >= 0.1) interpretation = 'Schwacher Wärmeeffekt';
+            else interpretation = 'Neutraler Effekt';
+        } else {
+            if (absValue >= 0.7) interpretation = 'Starker Kühleffekt';
+            else if (absValue >= 0.4) interpretation = 'Mäßiger Kühleffekt';
+            else if (absValue >= 0.1) interpretation = 'Schwacher Kühleffekt';
+            else interpretation = 'Neutraler Effekt';
+        }
+        
+        const tooltipText = `${interpretation} - Temperatureffekt: ${correlationValue.toFixed(3)}`;
+        
+        barElement.innerHTML = `
+            <div class="correlation-label-horizontal" title="${tooltipText}">${label}</div>
+            <div class="correlation-chart-container">
+                <div class="correlation-bar-horizontal-fill ${isPositive ? 'positive' : 'negative'}" 
+                     style="width: ${barWidth}%; background-color: ${color}; ${isPositive ? 'margin-left: 50%;' : 'margin-right: 50%; margin-left: ' + (50 - barWidth) + '%;'}" 
+                     title="${tooltipText}"></div>
+                <div class="correlation-zero-line"></div>
+            </div>
+            <div class="correlation-value-horizontal" title="${tooltipText}">${correlationValue >= 0 ? '+' : ''}${correlationValue.toFixed(3)}</div>
+        `;
+        
+        container.appendChild(barElement);
+    });
+    
+    // Show the section
+    section.style.display = 'block';
+    
+    console.log(`Displayed correlation chart with ${Object.keys(categoryCorrelations).length} categories`);
 }
 
 /**

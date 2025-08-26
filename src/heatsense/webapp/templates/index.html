@@ -216,28 +216,28 @@
                             </div>
                             <div class="legend-items">
                                 <div class="legend-item">
-                                    <div class="legend-color-box" style="background-color: #8b4513;"></div>
-                                    <span>Hohe Bebauung (0.9)</span>
+                                    <div class="legend-color-box" style="background-color: #8b0000;"></div>
+                                    <span>Dichte Bebauung (0.88)</span>
                                 </div>
                                 <div class="legend-item">
                                     <div class="legend-color-box" style="background-color: #cd853f;"></div>
-                                    <span>Geringe Bebauung (0.6)</span>
+                                    <span>Lockere Bebauung (0.56)</span>
                                 </div>
                                 <div class="legend-item">
                                     <div class="legend-color-box" style="background-color: #9acd32;"></div>
-                                    <span>Städtisches Grün (0.2)</span>
+                                    <span>Städtisches Grün (0.18)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #ffd700;"></div>
+                                    <span>Landwirtschaftliche Flächen (0.04)</span>
                                 </div>
                                 <div class="legend-item">
                                     <div class="legend-color-box" style="background-color: #228b22;"></div>
-                                    <span>Landwirtschaft (0.05)</span>
-                                </div>
-                                <div class="legend-item">
-                                    <div class="legend-color-box" style="background-color: #006400;"></div>
                                     <span>Natürliche Vegetation (0.01)</span>
                                 </div>
                                 <div class="legend-item">
                                     <div class="legend-color-box" style="background-color: #4169e1;"></div>
-                                    <span>Wasser (0.02)</span>
+                                    <span>Wasser und natürliche Flächen (0.02)</span>
                                 </div>
                             </div>
                         </div>
@@ -288,7 +288,17 @@
                         </div>
                     </div>
                     
-
+                    <!-- Land Use Temperature Effect Chart -->
+                    <div class="correlation-chart-section" id="correlation-chart-section" style="display: none;">
+                        <h4><i class="fas fa-chart-bar"></i> Temperatureffekte der Landnutzungstypen</h4>
+                        <p class="chart-description">
+                            Wärmende und kühlende Effekte verschiedener Landnutzungstypen auf die Umgebungstemperatur.
+                            Werte von -1 (stärkster Kühleffekt) bis +1 (stärkster Wärmeeffekt). Sortiert nach Effektstärke.
+                        </p>
+                        <div id="correlation-chart" class="correlation-chart">
+                            <!-- Chart will be populated dynamically -->
+                        </div>
+                    </div>
                     
                     <!-- Recommendations -->
                     <div class="recommendations-section">
@@ -315,24 +325,33 @@
             <span class="close" onclick="closeModal('info-modal')">&times;</span>
             <h2><i class="fas fa-info-circle"></i> Über HeatSense</h2>
             <p>
-                HeatSense ist ein innovatives Tool zur Analyse von städtischen Wärmeinseln. 
-                Es nutzt Satellitendaten, Wetterstation-Daten und Landnutzungsklassifikationen, 
+                HeatSense ist eine innovative Webanwendung zur intelligenten Analyse städtischer Wärmeinseln. 
+                Sie kombiniert Satellitendaten, Wetterstationsmessungen und Landnutzungsklassifikationen, 
                 um Temperaturverteilungen in urbanen Gebieten zu analysieren und 
-                Empfehlungen zur Klimaanpassung zu geben.
+                evidenzbasierte Empfehlungen zur Klimaanpassung zu geben.
             </p>
-            <h3>Funktionen:</h3>
+            <h3>Hauptfunktionen:</h3>
             <ul>
-                <li>Interaktive Karten mit Temperaturvisualisierung</li>
-                <li>Hotspot-Identifikation</li>
-                <li>Korrelationsanalyse zwischen Landnutzung und Temperatur</li>
-                <li>Adaptive Empfehlungen für Klimaschutzmaßnahmen</li>
+                <li><strong>Interaktive Temperaturkarten:</strong> Visualisierung der Oberflächentemperaturen mit verschiedenen Layern</li>
+                <li><strong>Wärmeinsel-Hotspots:</strong> Automatische Identifikation von kritischen Hitzegebieten</li>
+                <li><strong>Temperatureffekt-Analyse:</strong> Quantifizierung wärmender und kühlender Effekte verschiedener Landnutzungstypen</li>
+                <li><strong>Deutsche Kategorisierung:</strong> 9 präzise UHI-Kategorien von Dichter Bebauung bis Gewässer</li>
+                <li><strong>Adaptive Empfehlungen:</strong> Standortspezifische Maßnahmen zur Hitzeprävention</li>
+                <li><strong>Flexible Analysemodi:</strong> Von schneller Vorschau bis detaillierter Analyse</li>
+            </ul>
+            <h3>Wissenschaftliche Methodik:</h3>
+            <ul>
+                <li><strong>Temperatureffekt-Index:</strong> Standardisierte Bewertung (-1 bis +1) der thermischen Wirkung von Landnutzungstypen</li>
+                <li><strong>Spatial Join Analyse:</strong> Verknüpfung von Temperaturdaten mit Landnutzungsgeometrien</li>
+                <li><strong>Hotspot-Clustering:</strong> Statistische Identifikation räumlich zusammenhängender Wärmeinseln</li>
+                <li><strong>Versiegelungsgrad-Integration:</strong> Berücksichtigung spezifischer Impervious-Area-Koeffizienten</li>
             </ul>
             <h3>Datenquellen:</h3>
             <ul>
-                <li>Sentinel-2 Satellitendaten (ESA)</li>
-                <li>Deutscher Wetterdienst (DWD)</li>
-                <li>CORINE Land Cover Datenbank</li>
-                <li>Berlin Open Data Portal</li>
+                <li><strong>Landsat 8 Collection 2:</strong> Thermale Infrarot-Satellitendaten (Google Earth Engine)</li>
+                <li><strong>Deutscher Wetterdienst (DWD):</strong> Validierung mit Bodenmessungen</li>
+                <li><strong>CORINE Land Cover:</strong> Europäische Landnutzungsdatenbank</li>
+                <li><strong>Berlin Open Data:</strong> Hochauflösende Verwaltungsgebiete</li>
             </ul>
         </div>
     </div>
