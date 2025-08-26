@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seite nicht gefunden - HeatSense</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .error-container {
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: var(--spacing-xxl);
+        }
+        .error-code {
+            font-size: 6rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-lg);
+        }
+        .error-title {
+            font-size: 2rem;
+            margin-bottom: var(--spacing-lg);
+            color: var(--near-black);
+        }
+        .error-description {
+            font-size: 1.2rem;
+            color: var(--gray);
+            margin-bottom: var(--spacing-xl);
+            max-width: 600px;
+        }
+        .error-action {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: var(--white);
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            transition: var(--transition);
+        }
+        .error-action:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-container">
+            <div class="header-left">
+                <i class="fas fa-thermometer-half header-icon"></i>
+                <h1 class="header-title">HeatSense</h1>
+            </div>
+            <div class="header-center">
+                <p class="header-description">
+                    Analyse von städtischen Wärmeinseln zur Verbesserung der urbanen Klimaresilienz
+                </p>
+            </div>
+            <div class="header-right"></div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="error-container">
+            <div class="error-code">404</div>
+            <h2 class="error-title">Seite nicht gefunden</h2>
+            <p class="error-description">
+                Die gesuchte Seite konnte nicht gefunden werden. 
+                Möglicherweise wurde sie verschoben oder der Link ist nicht korrekt.
+            </p>
+            <a href="{{ url_for('index') }}" class="error-action">
+                <i class="fas fa-home"></i>
+                Zurück zur Startseite
+            </a>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2025 HeatSense - Urban Heat Island Analyzer</p>
+        </div>
+    </footer>
+</body>
+</html> 

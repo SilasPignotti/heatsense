@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heatsense"
+version = "0.1.0"
+description = "HeatSense - Urban Heat Island Analyzer for climate research and heat mitigation planning"
+readme = "README.md"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+license = {text = "MIT"}
+keywords = ["urban", "heat", "island", "climate", "satellite", "analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fiona>=1.10.1",
+    "geopandas>=1.1.0",
+    "matplotlib>=3.10.3",
+    "pyproj>=3.7.1",
+    "requests>=2.32.4",
+    "shapely>=2.1.1",
+    "wetterdienst>=0.109.0",
+    "pandas>=2.0.0",
+    "polars>=0.20.0",
+    "scipy>=1.11.0",
+    "earthengine-api>=0.1.0",
+    "rasterio>=1.3.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+    "numba>=0.58.0",
+    "pysal>=2.8.0",
+    "seaborn>=0.12.0",
+    "libpysal>=4.13.0",
+    "esda>=2.7.0",
+    "ruff>=0.12.0",
+    "pytest>=7.0.0",
+    "python-dotenv>=1.1.0",
+    "plotly>=6.2.0",
+    "folium>=0.20.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "streamlit",
+    "streamlit-folium",
+    "pydantic",
+    "python-multipart",
+    "flask>=2.3.0",
+    "flask-cors>=4.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+heatsense-webapp = "heatsense.webapp.run_webapp:main"
+heatsense-cli = "heatsense.webapp.analysis_backend:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/HeatSense"
+Repository = "https://github.com/your-username/HeatSense.git"
+Documentation = "https://github.com/your-username/HeatSense/docs"
+"Bug Reports" = "https://github.com/your-username/HeatSense/issues"
