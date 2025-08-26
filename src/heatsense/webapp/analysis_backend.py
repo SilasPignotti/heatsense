@@ -211,6 +211,7 @@ class UHIAnalysisBackend:
             # Store raw data for processing
             analysis_results["raw_weather_stations"] = weather_stations
             analysis_results["boundary_data"] = boundary_data
+            analysis_results["raw_landcover_data"] = landcover_data
             
             # Process results
             self.logger.info("📊 Processing results...")
@@ -488,8 +489,15 @@ class UHIAnalysisBackend:
                         
         # Process weather station data (from raw data if available)
         if "raw_weather_stations" in analysis_results and analysis_results["raw_weather_stations"] is not None:
-            weather_stations = analysis_results["raw_weather_stations"]
+            weather_stations = analysis_results["raw_weather_stations"].copy()
             try:
+                # Convert datetime columns to string format for JSON serialization
+                for col in weather_stations.columns:
+                    if weather_stations[col].dtype == 'datetime64[ns]':
+                        weather_stations[col] = weather_stations[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+                    elif str(weather_stations[col].dtype).startswith('datetime'):
+                        weather_stations[col] = weather_stations[col].astype(str)
+                
                 processed["weather_stations"] = {
                     "count": self._convert_to_json_serializable(len(weather_stations)),
                     "temperature_range": {
@@ -536,6 +544,90 @@ class UHIAnalysisBackend:
                 processed["boundary"] = json.loads(boundary_data.to_json())
             except Exception as e:
                 self.logger.warning(f"Failed to process boundary data: {e}")
+        
+        # Process landcover data for visualization
+        if "raw_landcover_data" in analysis_results and analysis_results["raw_landcover_data"] is not None:
+            landcover_data = analysis_results["raw_landcover_data"].copy()
+            boundary_data = analysis_results.get("boundary_data")
+            
+            try:
+                # Clip landcover data to boundary area
+                if boundary_data is not None:
+                    landcover_data = gpd.overlay(landcover_data, boundary_data, how='intersection')
+                
+                # Map CORINE fields to standardized names for frontend
+                if not landcover_data.empty:
+                    # Debug: Log available columns
+                    self.logger.info(f"Available landcover columns: {list(landcover_data.columns)}")
+                    if not landcover_data.empty:
+                        self.logger.info(f"Sample data: {landcover_data.iloc[0].to_dict()}")
+                    
+                    # Find the code column (prioritize newer years, check both cases)
+                    code_cols = ['Code_18', 'CODE_18', 'corine_code', 'Code_12', 'CODE_12', 'Code_06', 'CODE_06', 'CODE_00', 'CODE_90', 'gridcode', 'GRIDCODE']
+                    code_col = None
+                    for col in code_cols:
+                        if col in landcover_data.columns:
+                            code_col = col
+                            self.logger.info(f"Found CORINE code column: {code_col}")
+                            break
+                    
+                    if code_col:
+                        landcover_data['land_use_type'] = landcover_data[code_col].astype(str)
+                        self.logger.info(f"Sample CORINE codes: {landcover_data['land_use_type'].unique()[:10]}")
+                        
+                        # Add imperviousness coefficient based on CORINE codes
+                        imperviousness_map = {
+                            '111': 0.9,  # Continuous urban fabric
+                            '112': 0.6,  # Discontinuous urban fabric
+                            '121': 0.8,  # Industrial or commercial units
+                            '122': 0.7,  # Road and rail networks
+                            '123': 0.8,  # Port areas
+                            '124': 0.7,  # Airports
+                            '131': 0.3,  # Mineral extraction sites
+                            '132': 0.4,  # Dump sites
+                            '133': 0.5,  # Construction sites
+                            '141': 0.2,  # Green urban areas
+                            '142': 0.1,  # Sport and leisure facilities
+                        }
+                        
+                        landcover_data['impervious_coefficient'] = landcover_data[code_col].astype(str).map(imperviousness_map).fillna(0.05)
+                        
+                        # Create descriptive land use names
+                        landuse_names = {
+                            '111': 'Geschlossene Bebauung',
+                            '112': 'Offene Bebauung',
+                            '121': 'Industrie/Gewerbe',
+                            '122': 'Verkehrsflächen',
+                            '123': 'Hafenanlagen',
+                            '124': 'Flughäfen',
+                            '131': 'Bergbau',
+                            '132': 'Deponien',
+                            '133': 'Baustellen',
+                            '141': 'Städtisches Grün',
+                            '142': 'Sport/Freizeitanlagen',
+                            '211': 'Ackerflächen',
+                            '231': 'Wiesen und Weiden',
+                            '311': 'Laubwälder',
+                            '312': 'Nadelwälder',
+                            '313': 'Mischwälder',
+                            '324': 'Wald-Strauch-Übergangsstadien',
+                            '511': 'Wasserläufe',
+                            '512': 'Wasserflächen'
+                        }
+                        
+                        landcover_data['land_use_description'] = landcover_data[code_col].astype(str).map(landuse_names).fillna('Sonstige Landnutzung')
+                    else:
+                        self.logger.warning(f"No CORINE code column found. Available columns: {list(landcover_data.columns)}")
+                        # Fallback: use generic values
+                        landcover_data['land_use_type'] = 'unknown'
+                        landcover_data['impervious_coefficient'] = 0.3
+                        landcover_data['land_use_description'] = 'Unbekannte Landnutzung'
+                
+                processed["landuse_data"] = {
+                    "geojson": json.loads(landcover_data.to_json())
+                }
+            except Exception as e:
+                self.logger.warning(f"Failed to process landcover data: {e}")
         
         # Create summary
         processed["summary"] = {

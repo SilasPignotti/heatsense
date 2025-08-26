@@ -144,6 +144,9 @@
                             <button class="map-control-btn" id="toggle-hotspots" onclick="toggleHotspotsLayer()">
                                 <i class="fas fa-fire"></i> Hotspots
                             </button>
+                            <button class="map-control-btn" id="toggle-landuse" onclick="toggleLanduseLayer()">
+                                <i class="fas fa-leaf"></i> Landnutzung
+                            </button>
                             <button class="map-control-btn" id="toggle-weather" onclick="toggleWeatherStations()">
                                 <i class="fas fa-cloud-sun"></i> Wetterstationen
                             </button>
@@ -201,6 +204,40 @@
                                 <div class="legend-item">
                                     <div class="legend-hotspot-marker"></div>
                                     <span>Wärmeinsel-Hotspot</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Land Use Legend -->
+                        <div id="landuse-legend" class="legend-section" style="display: none;">
+                            <div class="legend-subtitle">
+                                <i class="fas fa-leaf"></i>
+                                Landnutzung
+                            </div>
+                            <div class="legend-items">
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #8b4513;"></div>
+                                    <span>Hohe Bebauung (0.9)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #cd853f;"></div>
+                                    <span>Geringe Bebauung (0.6)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #9acd32;"></div>
+                                    <span>Städtisches Grün (0.2)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #228b22;"></div>
+                                    <span>Landwirtschaft (0.05)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #006400;"></div>
+                                    <span>Natürliche Vegetation (0.01)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #4169e1;"></div>
+                                    <span>Wasser (0.02)</span>
                                 </div>
                             </div>
                         </div>

@@ -9,6 +9,7 @@ let temperatureLayer = null;
 let hotspotsLayer = null;
 let weatherStationsLayer = null;
 let boundaryLayer = null;
+let landuseLayer = null;
 let currentAnalysisData = null;
 
 // Application state
@@ -525,6 +526,29 @@ function updateMapLayers(data) {
         // Don't add to map by default - user can toggle
     }
     
+    // Add land use layer (if available)
+    if (data.landuse_data?.geojson) {
+        landuseLayer = L.geoJSON(data.landuse_data.geojson, {
+            style: function(feature) {
+                const imperviousness = feature.properties.impervious_coefficient || feature.properties.CODE_18 || 0;
+                return {
+                    color: getLanduseColor(imperviousness),
+                    weight: 1,
+                    opacity: 0.8,
+                    fillColor: getLanduseColor(imperviousness),
+                    fillOpacity: 0.6
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties;
+                const landuse = props.land_use_description || props.land_use_type || 'Unbekannt';
+                const imperviousness = props.impervious_coefficient || 0;
+                layer.bindPopup(`🌿 Landnutzung: ${landuse}<br/>Versiegelungsgrad: ${imperviousness.toFixed(2)}`);
+            }
+        });
+        // Don't add to map by default - user can toggle
+    }
+    
     // Update map control button states
     updateMapControlButtons();
     updateLegend(); // Update legend after layers are added
@@ -540,6 +564,18 @@ function getTemperatureColor(temperature) {
     if (temperature < 30) return '#ff6600';
     if (temperature < 35) return '#ff3300';
     return '#cc0000';
+}
+
+/**
+ * Get land use color based on imperviousness coefficient
+ */
+function getLanduseColor(imperviousness) {
+    if (imperviousness > 0.8) return '#8b4513';      // High density urban (brown)
+    if (imperviousness > 0.4) return '#cd853f';      // Low density urban (light brown) 
+    if (imperviousness > 0.1) return '#9acd32';      // Urban green (yellow green)
+    if (imperviousness > 0.03) return '#228b22';     // Agricultural (forest green)
+    if (imperviousness > 0.005) return '#006400';    // Natural vegetation (dark green)
+    return '#4169e1';                                 // Water and natural (blue)
 }
 
 /**
@@ -561,6 +597,10 @@ function clearMapLayers() {
     if (boundaryLayer) {
         map.removeLayer(boundaryLayer);
         boundaryLayer = null;
+    }
+    if (landuseLayer) {
+        map.removeLayer(landuseLayer);
+        landuseLayer = null;
     }
     updateLegend(); // Update legend when all layers are cleared
 }
@@ -614,6 +654,14 @@ function updateMapControlButtons() {
         weatherBtn.disabled = false;
     } else {
         weatherBtn.disabled = true;
+    }
+    
+    // Land use button
+    const landuseBtn = document.getElementById('toggle-landuse');
+    if (landuseLayer) {
+        landuseBtn.disabled = false;
+    } else {
+        landuseBtn.disabled = true;
     }
 }
 
@@ -680,6 +728,23 @@ function toggleWeatherStations() {
             map.addLayer(weatherStationsLayer);
             btn.classList.add('active');
         }
+    }
+}
+
+/**
+ * Toggle land use layer
+ */
+function toggleLanduseLayer() {
+    const btn = document.getElementById('toggle-landuse');
+    if (landuseLayer) {
+        if (map.hasLayer(landuseLayer)) {
+            map.removeLayer(landuseLayer);
+            btn.classList.remove('active');
+        } else {
+            map.addLayer(landuseLayer);
+            btn.classList.add('active');
+        }
+        updateLegend(); // Update legend when landuse layer is toggled
     }
 }
 
@@ -851,10 +916,12 @@ function updateLegend() {
     const legendContainer = document.getElementById('map-legend');
     const temperatureLegend = document.getElementById('temperature-legend');
     const hotspotsLegend = document.getElementById('hotspots-legend');
+    const landuseLegend = document.getElementById('landuse-legend');
     
     // Check which layers are active
     const isTemperatureActive = temperatureLayer && map.hasLayer(temperatureLayer);
     const isHotspotsActive = hotspotsLayer && map.hasLayer(hotspotsLayer);
+    const isLanduseActive = landuseLayer && map.hasLayer(landuseLayer);
     
     // Show/hide individual legend sections
     if (isTemperatureActive) {
@@ -869,8 +936,14 @@ function updateLegend() {
         hotspotsLegend.style.display = 'none';
     }
     
+    if (isLanduseActive) {
+        landuseLegend.style.display = 'block';
+    } else {
+        landuseLegend.style.display = 'none';
+    }
+    
     // Show/hide entire legend container
-    if (isTemperatureActive || isHotspotsActive) {
+    if (isTemperatureActive || isHotspotsActive || isLanduseActive) {
         legendContainer.style.display = 'block';
     } else {
         legendContainer.style.display = 'none';
