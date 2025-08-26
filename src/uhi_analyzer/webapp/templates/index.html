@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeatSense - Urban Heat Island Analyzer</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Flatpickr for date selection -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <!-- Left: Title and Icon -->
+            <div class="header-left">
+                <i class="fas fa-thermometer-half header-icon"></i>
+                <h1 class="header-title">HeatSense</h1>
+            </div>
+            
+            <!-- Center: Description -->
+            <div class="header-center">
+                                    <p class="header-description">
+                        Intelligente Analyse städtischer Wärmeinseln
+                    </p>
+            </div>
+            
+            <!-- Right: Info Button -->
+            <div class="header-right">
+                <button class="info-button" onclick="showInfo()">
+                    <i class="fas fa-info-circle"></i>
+                    Info
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="content-container">
+            <!-- Left Column: Input Elements -->
+            <div class="left-column">
+                <div class="input-section">
+                    <h2><i class="fas fa-cog"></i> Einstellungen</h2>
+                    
+                    <!-- Geographical Selection -->
+                    <div class="input-group">
+                        <label class="section-label">
+                            <i class="fas fa-map-marker-alt"></i>
+                            Untersuchungsgebiet
+                        </label>
+                        
+                        <div class="area-type-buttons">
+                            <button type="button" class="area-type-btn" data-type="stadt" onclick="selectAreaType('stadt')">
+                                Stadt
+                            </button>
+                            <button type="button" class="area-type-btn active" data-type="bezirk" onclick="selectAreaType('bezirk')">
+                                Bezirk
+                            </button>
+                            <button type="button" class="area-type-btn" data-type="ortsteil" onclick="selectAreaType('ortsteil')">
+                                Ortsteil
+                            </button>
+                        </div>
+                        
+                        <select id="area-select" class="form-select">
+                            <option value="">Bezirk auswählen...</option>
+                            {% for district in districts %}
+                            <option value="{{ district }}">{{ district }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Time Period Selection -->
+                    <div class="input-group">
+                        <label class="section-label">
+                            <i class="fas fa-calendar-alt"></i>
+                            Zeitraum
+                        </label>
+                        <div class="date-inputs">
+                            <div class="date-field">
+                                <label for="start-date">Von:</label>
+                                <input type="text" id="start-date" class="form-input date-input" 
+                                       placeholder="01.06.2025" value="01.06.2025">
+                            </div>
+                            <div class="date-field">
+                                <label for="end-date">Bis:</label>
+                                <input type="text" id="end-date" class="form-input date-input" 
+                                       placeholder="30.06.2025" value="30.06.2025">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Analyze Button -->
+                    <div class="input-group">
+                        <button id="analyze-button" class="analyze-button" onclick="startAnalysis()">
+                            <i class="fas fa-play"></i>
+                            Analyse starten
+                        </button>
+                    </div>
+                    
+                    <!-- Performance Mode Selection -->
+                    <div class="input-group">
+                        <label class="section-label">
+                            <i class="fas fa-microchip"></i>
+                            Analysemodus
+                        </label>
+                        <div class="performance-modes" id="performance-modes">
+                            <!-- Performance modes will be loaded dynamically -->
+                        </div>
+                    </div>
+                    
+
+                </div>
+            </div>
+            
+            <!-- Right Column: Output Elements -->
+            <div class="right-column">
+                <!-- Map Container -->
+                <div class="map-container">
+                    <div class="map-header">
+                        <h3><i class="fas fa-map"></i> Karte</h3>
+                        <div class="map-controls">
+                            <button class="map-control-btn" id="toggle-boundary" onclick="toggleBoundaryLayer()">
+                                <i class="fas fa-vector-square"></i> Untersuchungsgebiet
+                            </button>
+                            <button class="map-control-btn" id="toggle-temperature" onclick="toggleTemperatureLayer()">
+                                <i class="fas fa-thermometer-half"></i> Temperatur
+                            </button>
+                            <button class="map-control-btn" id="toggle-hotspots" onclick="toggleHotspotsLayer()">
+                                <i class="fas fa-fire"></i> Hotspots
+                            </button>
+                            <button class="map-control-btn" id="toggle-weather" onclick="toggleWeatherStations()">
+                                <i class="fas fa-cloud-sun"></i> Wetterstationen
+                            </button>
+                        </div>
+                    </div>
+                    <div id="map" class="map"></div>
+                    <!-- Map Legend -->
+                    <div id="map-legend" class="map-legend" style="display: none;">
+                        <div class="legend-title">
+                            <i class="fas fa-info-circle"></i>
+                            Legende
+                        </div>
+                        
+                        <!-- Temperature Legend -->
+                        <div id="temperature-legend" class="legend-section" style="display: none;">
+                            <div class="legend-subtitle">
+                                <i class="fas fa-thermometer-half"></i>
+                                Temperatur (°C)
+                            </div>
+                            <div class="legend-items">
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #0066cc;"></div>
+                                    <span>< 15°C</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #00cc66;"></div>
+                                    <span>15-20°C</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #cccc00;"></div>
+                                    <span>20-25°C</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #ff6600;"></div>
+                                    <span>25-30°C</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #ff3300;"></div>
+                                    <span>30-35°C</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color-box" style="background-color: #cc0000;"></div>
+                                    <span>≥ 35°C</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hotspots Legend -->
+                        <div id="hotspots-legend" class="legend-section" style="display: none;">
+                            <div class="legend-subtitle">
+                                <i class="fas fa-fire"></i>
+                                Hotspots
+                            </div>
+                            <div class="legend-items">
+                                <div class="legend-item">
+                                    <div class="legend-hotspot-marker"></div>
+                                    <span>Wärmeinsel-Hotspot</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analysis Results -->
+                <div class="results-container" id="results-container">
+                    <div class="results-header">
+                        <h3><i class="fas fa-chart-bar"></i> Analyseergebnisse</h3>
+                        <div class="download-buttons">
+                            <button id="download-button" class="download-button" onclick="downloadResults()" style="display: none;">
+                                <i class="fas fa-download"></i>
+                                JSON herunterladen
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- KPIs -->
+                    <div class="kpis-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-fire"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-value" id="kpi-hotspots">-</div>
+                                <div class="kpi-label">Hotspots</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-thermometer-half"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-value" id="kpi-temp-avg">-</div>
+                                <div class="kpi-label">Ø Temperatur</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-temperature-high"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-value" id="kpi-temp-max">-</div>
+                                <div class="kpi-label">Max Temperatur</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-lightbulb"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-value" id="kpi-recommendations">-</div>
+                                <div class="kpi-label">Empfehlungen</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <!-- Recommendations -->
+                    <div class="recommendations-section">
+                        <h4><i class="fas fa-lightbulb"></i> Empfehlungen</h4>
+                        <div id="recommendations-list" class="recommendations-list">
+                            <!-- Recommendations will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2025 HeatSense</p>
+        </div>
+    </footer>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('info-modal')">&times;</span>
+            <h2><i class="fas fa-info-circle"></i> Über HeatSense</h2>
+            <p>
+                HeatSense ist ein innovatives Tool zur Analyse von städtischen Wärmeinseln. 
+                Es nutzt Satellitendaten, Wetterstation-Daten und Landnutzungsklassifikationen, 
+                um Temperaturverteilungen in urbanen Gebieten zu analysieren und 
+                Empfehlungen zur Klimaanpassung zu geben.
+            </p>
+            <h3>Funktionen:</h3>
+            <ul>
+                <li>Interaktive Karten mit Temperaturvisualisierung</li>
+                <li>Hotspot-Identifikation</li>
+                <li>Korrelationsanalyse zwischen Landnutzung und Temperatur</li>
+                <li>Adaptive Empfehlungen für Klimaschutzmaßnahmen</li>
+            </ul>
+            <h3>Datenquellen:</h3>
+            <ul>
+                <li>Sentinel-2 Satellitendaten (ESA)</li>
+                <li>Deutscher Wetterdienst (DWD)</li>
+                <li>CORINE Land Cover Datenbank</li>
+                <li>Berlin Open Data Portal</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="loading-modal">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3><i class="fas fa-chart-line"></i> Analyse läuft</h3>
+            <p id="loading-text">Daten werden heruntergeladen...</p>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 
