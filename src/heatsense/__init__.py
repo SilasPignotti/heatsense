@@ -1,7 +1,19 @@
-"""Urban Heat Island Analyzer - Analysis and visualization of urban heat island effects."""
+"""
+HeatSense - Urban Heat Island analysis and visualization toolkit.
 
-# Import only the most basic classes to avoid circular imports
-# Users should import specific classes from their respective modules for advanced usage
+A comprehensive Python package for analyzing urban heat island effects using
+satellite data, meteorological observations, and land use information.
+
+Key components:
+    - Urban Heat Island analysis engine
+    - Data downloaders for CORINE, DWD, and WFS services  
+    - Web interface for interactive analysis
+    - Command-line tools for batch processing
+"""
 
 __version__ = "0.1.0"
 __author__ = "Silas Pignotti"
+
+# Package metadata
+__description__ = "Urban Heat Island analysis toolkit"
+__license__ = "MIT"

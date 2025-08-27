@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """
-HeatSense Web Application Launcher
+HeatSense web application launcher.
 
-Launch the HeatSense Urban Heat Island Analyzer web interface.
-This is the main entry point for running the web application.
+Starts the Flask web interface for Urban Heat Island analysis with proper
+configuration for development and production environments.
+
+Dependencies:
+    - flask: Web application framework
+    - heatsense: Main analysis package
 
 Usage:
     python run_webapp.py
     or
     uv run run_webapp.py
 
-The webapp will be available at: http://localhost:8000
+The web application will be available at: http://localhost:8000
 """
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
-# Add the src directory to Python path
+# Add source directory to Python path
 current_dir = Path(__file__).parent
 src_dir = current_dir / "src"
 sys.path.insert(0, str(src_dir))
@@ -27,44 +31,58 @@ try:
     from heatsense.webapp.app import app
 except ImportError as e:
     print(f"❌ Import error: {e}")
-    print("💡 Make sure you have installed the dependencies:")
+    print("💡 Install dependencies with:")
     print("   uv sync")
     print("   or")
     print("   pip install -e .")
     sys.exit(1)
 
-def main():
-    """Launch the HeatSense Flask web application."""
-    print("🔥 HeatSense - Urban Heat Island Analyzer")
-    print("=" * 50)
-    print("📍 Starting web interface...")
-    print("🌐 URL: http://localhost:8000")
-    print("🚀 Press Ctrl+C to stop the server")
-    print("=" * 50)
-    
-    # Set environment variables for development
-    os.environ['FLASK_ENV'] = 'development'
-    os.environ['FLASK_DEBUG'] = '1'
-    
-    # Configure logging
+
+def configure_logging():
+    """Set up logging configuration for the web application."""
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+
+
+def display_startup_info():
+    """Display application startup information."""
+    print("🔥 HeatSense - Urban Heat Island Analyzer")
+    print("=" * 50)
+    print("📍 Starting web interface...")
+    print("🌐 Access URL: http://localhost:8000")
+    print("🌐 Network URL: http://0.0.0.0:8000")
+    print("🚀 Press Ctrl+C to stop the server")
+    print("=" * 50)
+
+
+def main():
+    """Launch the HeatSense Flask web application."""
+    configure_logging()
+    display_startup_info()
+    
+    # Determine environment configuration
+    is_development = os.environ.get('FLASK_ENV', 'production') == 'development'
+    
+    if is_development:
+        print("🔧 Running in DEVELOPMENT mode")
+    else:
+        print("🚀 Running in PRODUCTION mode")
     
     try:
-        # Run the Flask app
         app.run(
             host='0.0.0.0',
             port=8000,
-            debug=True,
-            use_reloader=True
+            debug=is_development,
+            use_reloader=is_development
         )
     except KeyboardInterrupt:
         print("\n🛑 HeatSense webapp stopped by user")
     except Exception as e:
-        print(f"❌ Failed to start webapp: {e}")
+        print(f"❌ Failed to start web application: {e}")
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

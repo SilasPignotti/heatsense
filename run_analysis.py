@@ -1,41 +1,41 @@
 #!/usr/bin/env python3
 """
-HeatSense CLI Analysis Tool
+HeatSense command-line interface for Urban Heat Island analysis.
 
-Command-line interface for running Urban Heat Island analysis.
-This script provides direct access to the analysis backend for programmatic use.
+This script provides direct access to the UHI analysis backend for programmatic
+use and batch processing. Supports various output formats and performance modes.
 
-Usage:
-    python run_analysis.py --area "Kreuzberg" --start-date 2023-07-01 --end-date 2023-07-31
-    or
-    uv run run_analysis.py --area "Berlin" --start-date 2023-06-01 --end-date 2023-08-31 --mode detailed
+Dependencies:
+    - heatsense: Main analysis package
+    - argparse: Command-line argument parsing
 """
 
 import argparse
 import json
-import sys
 import logging
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
-# Add the src directory to Python path
+# Add source directory to Python path
 current_dir = Path(__file__).parent
 src_dir = current_dir / "src"
 sys.path.insert(0, str(src_dir))
 
 try:
-    from heatsense.webapp.analysis_backend import UHIAnalysisBackend
     from heatsense.config.settings import UHI_PERFORMANCE_MODES
+    from heatsense.webapp.analysis_backend import UHIAnalysisBackend
 except ImportError as e:
     print(f"❌ Import error: {e}")
-    print("💡 Make sure you have installed the dependencies:")
+    print("💡 Install dependencies with:")
     print("   uv sync")
     print("   or")
     print("   pip install -e .")
     sys.exit(1)
 
-def parse_args():
-    """Parse command line arguments."""
+
+def parse_arguments():
+    """Parse and validate command-line arguments."""
     parser = argparse.ArgumentParser(
         description="HeatSense - Urban Heat Island Analysis CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -81,42 +81,92 @@ Available performance modes: preview, fast, standard, detailed
     parser.add_argument(
         '--output',
         type=str,
-        help='Output file path for results (JSON format). If not specified, prints to stdout'
+        help='Output file path for results (JSON format). If not specified, saves to temp/ directory'
     )
     
     parser.add_argument(
         '--verbose', '-v',
         action='store_true',
-        help='Enable verbose logging'
+        help='Enable verbose logging output'
     )
     
     return parser.parse_args()
 
-def validate_date(date_string):
-    """Validate date format."""
+
+def validate_date_format(date_string: str) -> datetime:
+    """Validate date string format and convert to datetime object."""
     try:
-        return datetime.strptime(date_string, '%Y-%m-%d').date()
+        return datetime.strptime(date_string, '%Y-%m-%d')
     except ValueError:
         raise argparse.ArgumentTypeError(f"Invalid date format: {date_string}. Use YYYY-MM-DD")
 
-def main():
-    """Main CLI function."""
-    args = parse_args()
+
+def save_geojson_outputs(result_data: dict, analysis_id: str, output_dir: Path) -> None:
+    """Save individual GeoJSON outputs to separate files."""
+    geojson_outputs = [
+        ('temperature_data', 'temperature', '📊 Temperature data'),
+        ('hotspots', 'heat_islands', '🔥 Heat islands'),
+        ('weather_stations', 'weather_stations', '🌡️ Weather stations'),
+    ]
     
-    # Set up logging
+    for data_key, filename_suffix, description in geojson_outputs:
+        if data_key in result_data and 'geojson' in result_data[data_key]:
+            output_path = output_dir / f"{analysis_id}_{filename_suffix}.geojson"
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(result_data[data_key]['geojson'], f, indent=2, ensure_ascii=False)
+            print(f"   {description}: {output_path}")
+    
+    # Save boundary data if available
+    if 'boundary' in result_data:
+        boundary_path = output_dir / f"{analysis_id}_boundary.geojson"
+        with open(boundary_path, 'w', encoding='utf-8') as f:
+            json.dump(result_data['boundary'], f, indent=2, ensure_ascii=False)
+        print(f"   🗺️ Boundary: {boundary_path}")
+
+
+def print_analysis_summary(result: dict) -> None:
+    """Display analysis summary information."""
+    data = result.get('data', {})
+    summary = data.get('summary', {})
+    
+    print("\n📊 Analysis Summary:")
+    
+    # Temperature overview
+    temp_overview = summary.get('temperature_overview', {})
+    if 'mean' in temp_overview:
+        print(f"   • Mean temperature: {temp_overview['mean']:.1f}°C")
+    
+    # Hotspots count
+    hotspots_count = summary.get('hotspots_count', 'N/A')
+    print(f"   • Heat hotspots found: {hotspots_count}")
+    
+    # Execution time
+    execution_time = result.get('execution_time', 'N/A')
+    if isinstance(execution_time, (int, float)):
+        print(f"   • Execution time: {execution_time:.1f}s")
+    else:
+        print(f"   • Execution time: {execution_time}")
+
+
+def main():
+    """Execute main CLI functionality."""
+    args = parse_arguments()
+    
+    # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
+    # Display analysis configuration
     print("🔥 HeatSense - Urban Heat Island Analysis CLI")
     print("=" * 60)
     
-    # Validate dates
     try:
-        start_date = validate_date(args.start_date)
-        end_date = validate_date(args.end_date)
+        # Validate date inputs
+        start_date = validate_date_format(args.start_date)
+        end_date = validate_date_format(args.end_date)
         
         if start_date >= end_date:
             print("❌ Error: Start date must be before end date")
@@ -126,18 +176,17 @@ def main():
         print(f"❌ {e}")
         sys.exit(1)
     
-    # Display analysis parameters
     print(f"📍 Area: {args.area}")
     print(f"📅 Period: {args.start_date} to {args.end_date}")
-    print(f"⚙️  Mode: {args.mode}")
-    print(f"💾 Output: {'File' if args.output else 'temp/ directory + Console'}")
+    print(f"⚙️ Performance mode: {args.mode}")
+    print(f"💾 Output: {'Custom file' if args.output else 'temp/ directory'}")
     print("=" * 60)
     
-    # Initialize backend
+    # Initialize analysis backend
     backend = UHIAnalysisBackend(log_level="DEBUG" if args.verbose else "INFO")
     
     try:
-        # Run analysis
+        # Execute analysis
         result = backend.analyze(
             area=args.area,
             start_date=args.start_date,
@@ -145,91 +194,50 @@ def main():
             performance_mode=args.mode
         )
         
-        # Handle output
+        # Prepare output directory and filename
+        analysis_id = f"{args.area.replace(' ', '-')}_{args.start_date}_{args.end_date}_{args.mode}"
+        
         if args.output:
+            # Save to specified output file
             output_path = Path(args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Save main result file
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
             
             print(f"✅ Results saved to: {output_path}")
-            
-            # Save individual GeoJSON files to temp directory if analysis was successful
-            if result.get('status') == 'completed':
-                data = result.get('data', {})
-                temp_dir = Path('temp')
-                temp_dir.mkdir(exist_ok=True)
-                
-                analysis_id = f"{args.area.replace(' ', '-')}_{args.start_date}_{args.end_date}_{args.mode}"
-                
-                # Save temperature layer
-                if 'temperature_data' in data and 'geojson' in data['temperature_data']:
-                    temp_path = temp_dir / f"{analysis_id}_temperature.geojson"
-                    with open(temp_path, 'w', encoding='utf-8') as f:
-                        json.dump(data['temperature_data']['geojson'], f, indent=2, ensure_ascii=False)
-                    print(f"   📊 Temperature data: {temp_path}")
-                
-                # Save hotspots layer
-                if 'hotspots' in data and 'geojson' in data['hotspots']:
-                    hotspots_path = temp_dir / f"{analysis_id}_heat_islands.geojson"
-                    with open(hotspots_path, 'w', encoding='utf-8') as f:
-                        json.dump(data['hotspots']['geojson'], f, indent=2, ensure_ascii=False)
-                    print(f"   🔥 Heat islands: {hotspots_path}")
-                
-                # Save boundary layer
-                if 'boundary' in data:
-                    boundary_path = temp_dir / f"{analysis_id}_boundary.geojson"
-                    with open(boundary_path, 'w', encoding='utf-8') as f:
-                        json.dump(data['boundary'], f, indent=2, ensure_ascii=False)
-                    print(f"   🗺️ Boundary: {boundary_path}")
-                
-                # Save weather stations if available
-                if 'weather_stations' in data and 'geojson' in data['weather_stations']:
-                    weather_path = temp_dir / f"{analysis_id}_weather_stations.geojson"
-                    with open(weather_path, 'w', encoding='utf-8') as f:
-                        json.dump(data['weather_stations']['geojson'], f, indent=2, ensure_ascii=False)
-                    print(f"   🌡️ Weather stations: {weather_path}")
-                
-                # Print summary to console
-                summary = data.get('summary', {})
-                print("\n📊 Analysis Summary:")
-                print(f"   • Mean temperature: {summary.get('temperature_overview', {}).get('mean', 'N/A')}°C")
-                print(f"   • Hotspots found: {summary.get('hotspots_count', 'N/A')}")
-                print(f"   • Execution time: {result.get('execution_time', 'N/A')}s")
-            
         else:
-            # If no output file specified but analysis successful, save to temp directory
-            if result.get('status') == 'completed':
-                temp_dir = Path('temp')
-                temp_dir.mkdir(exist_ok=True)
-                
-                analysis_id = f"{args.area.replace(' ', '-')}_{args.start_date}_{args.end_date}_{args.mode}"
-                default_output = temp_dir / f"{analysis_id}_result.json"
-                
-                with open(default_output, 'w', encoding='utf-8') as f:
-                    json.dump(result, f, indent=2, ensure_ascii=False)
-                
-                print(f"📄 Full results automatically saved to: {default_output}")
-                
-                # Also save GeoJSON files
-                data = result.get('data', {})
-                if 'temperature_data' in data and 'geojson' in data['temperature_data']:
-                    temp_path = temp_dir / f"{analysis_id}_temperature.geojson"
-                    with open(temp_path, 'w', encoding='utf-8') as f:
-                        json.dump(data['temperature_data']['geojson'], f, indent=2, ensure_ascii=False)
-                    print(f"📊 Temperature data: {temp_path}")
+            # Save to default temp directory
+            temp_dir = Path('temp')
+            temp_dir.mkdir(exist_ok=True)
             
-            # Print summary to stdout
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            default_output = temp_dir / f"{analysis_id}_result.json"
+            with open(default_output, 'w', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            
+            print(f"✅ Results saved to: {default_output}")
+        
+        # Save individual GeoJSON outputs if analysis completed successfully
+        if result.get('status') == 'completed':
+            output_dir = Path(args.output).parent if args.output else Path('temp')
+            save_geojson_outputs(result.get('data', {}), analysis_id, output_dir)
+            print_analysis_summary(result)
+        else:
+            print(f"⚠️ Analysis status: {result.get('status', 'unknown')}")
+            if 'errors' in result:
+                for error in result['errors']:
+                    print(f"   ❌ {error}")
             
     except KeyboardInterrupt:
-        print("\n🛑 Analysis stopped by user")
+        print("\n🛑 Analysis interrupted by user")
         sys.exit(1)
     except Exception as e:
         print(f"❌ Analysis failed: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

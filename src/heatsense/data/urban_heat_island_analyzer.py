@@ -1,70 +1,98 @@
-import ee
-import numpy as np
-import geopandas as gpd
-import pandas as pd
-import libpysal.weights
-import esda
-import warnings
-from typing import Dict, Union, List, Tuple, Optional
-from datetime import datetime, date
+"""
+Urban Heat Island analysis engine using satellite data and land cover correlation.
+
+This module provides the core analysis engine for comprehensive Urban Heat Island
+research. Integrates satellite temperature data with land use information to
+identify thermal hotspots, analyze spatial patterns, and generate mitigation
+recommendations for urban planning applications.
+
+Key features:
+    - Landsat thermal band analysis via Google Earth Engine
+    - Statistical correlation with land use categories
+    - Spatial hotspot detection and clustering
+    - Ground validation with meteorological data
+    - Automated mitigation strategy recommendations
+
+Dependencies:
+    - ee: Google Earth Engine Python API for satellite data
+    - geopandas: Geospatial data operations and analysis
+    - numpy/pandas: Numerical computing and data manipulation
+    - libpysal/esda: Spatial statistics and autocorrelation
+    - scipy: Statistical analysis and correlations
+    - shapely: Geometric operations and spatial queries
+"""
+
 import logging
+import warnings
+from datetime import date, datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
+import ee
+import esda
+import geopandas as gpd
+import libpysal.weights
+import numpy as np
+import pandas as pd
 from scipy.stats import pearsonr
 from shapely.geometry import box
-from heatsense.utils.data_processor import process_corine_for_uhi, CORINE_UHI_DESCRIPTIONS, enhance_weather_data_for_uhi
 
 from heatsense.config.settings import (
+    CRS_CONFIG,
     UHI_EARTH_ENGINE_PROJECT,
     UHI_LOG_LEVEL,
-    CRS_CONFIG,
+)
+from heatsense.utils.data_processor import (
+    UHI_CATEGORY_DESCRIPTIONS,
+    UHI_IMPERVIOUSNESS_COEFFICIENTS,
+    process_corine_for_uhi,
+    standardize_weather_data,
 )
 
 class UrbanHeatIslandAnalyzer:
     """
-    Specialized analyzer for Urban Heat Island (UHI) effects using satellite imagery and land use data.
+    Urban Heat Island analysis engine using satellite data and land use correlation.
     
-    This analyzer processes Landsat thermal data, land use information, and weather station data
-    to identify and analyze urban heat islands. It provides comprehensive UHI analysis including:
+    Provides comprehensive UHI analysis capabilities including satellite temperature
+    analysis, land use correlation, hotspot detection, and mitigation recommendations.
+    Integrates with Google Earth Engine for satellite data processing and advanced
+    spatial statistics for pattern analysis.
     
-    - Satellite temperature analysis using Landsat thermal bands
-    - Land use correlation analysis with heat patterns
-    - Heat hotspot identification and clustering
-    - Temporal trend analysis across seasons
-    - Ground validation with weather station data
-    - Mitigation strategy recommendations
-    - Comprehensive visualization of results
+    Key capabilities:
+    - Landsat thermal band analysis via Google Earth Engine
+    - Statistical correlation with CORINE land use categories
+    - Spatial hotspot detection and clustering algorithms
+    - Ground validation with meteorological station data
+    - Automated mitigation strategy recommendations
+    - Multi-temporal trend analysis and visualization
     
-    Features:
-    - Google Earth Engine integration for satellite data
-    - Advanced spatial analysis with clustering algorithms
-    - Statistical correlation analysis
-    - Configurable parameters for different study areas
-    - Robust error handling and logging
-    - Professional visualization capabilities
+    Performance modes:
+    - Preview: Fast analysis for initial insights (<30s)
+    - Fast: Balanced performance for most applications (30-60s)
+    - Standard: Comprehensive analysis with weather validation (1-3 min)
+    - Detailed: Full analysis with high-resolution processing (3-10 min)
+    
+    Args:
+        cloud_cover_threshold: Maximum cloud cover percentage (0-100, default: 20)
+        grid_cell_size: Analysis grid resolution in meters (default: 100)
+        hotspot_threshold: Temperature percentile for hotspot detection (0-1, default: 0.9)
+        min_cluster_size: Minimum cells for valid hotspot clusters (default: 5)
+        use_grouped_categories: Enable simplified land use categories (default: True)
+        log_file: Optional path for detailed logging output
+        logger: Optional custom logger instance
     """
     
     def __init__(
         self, 
-        cloud_cover_threshold: float = 20,  # Maximum acceptable cloud cover percentage (0-100)
-        grid_cell_size: float = 100,  # Analysis grid cell size in meters
-        hotspot_threshold: float = 0.9,  # Percentile threshold for hotspot identification
-        min_cluster_size: int = 5,  # Minimum number of cells for a valid hotspot cluster
+        cloud_cover_threshold: float = 20,
+        grid_cell_size: float = 100,
+        hotspot_threshold: float = 0.9,
+        min_cluster_size: int = 5,
         use_grouped_categories: bool = True,
         log_file: Optional[Path] = None,
         logger: Optional[logging.Logger] = None,
     ):
-        """
-        Initialize the Urban Heat Island analyzer.
-        
-        Args:
-            cloud_cover_threshold: Maximum acceptable cloud cover percentage (0-100)
-            grid_cell_size: Analysis grid cell size in meters
-            hotspot_threshold: Percentile threshold for hotspot identification (0-1)
-            min_cluster_size: Minimum number of cells for a valid hotspot cluster
-            use_grouped_categories: If True, use grouped categories for cleaner analysis
-            log_file: Optional path for log file
-            logger: Optional logger instance
-        """
+        """Initialize the Urban Heat Island analyzer with specified configuration."""
         self.cloud_threshold = cloud_cover_threshold
         self.grid_cell_size = grid_cell_size
         self.hotspot_threshold = hotspot_threshold
@@ -72,8 +100,7 @@ class UrbanHeatIslandAnalyzer:
         self.use_grouped_categories = use_grouped_categories
         self.initialized = False
         self.logger = logger or self._setup_logger(log_file)
-        self.logger.info(f"UHI Analyzer initialized: cloud_threshold={cloud_cover_threshold}%, "
-                        f"grid_size={grid_cell_size}m, hotspot_threshold={hotspot_threshold}")
+        self.logger.info("UHI Analyzer initialized with custom configuration")
 
     def _setup_logger(self, log_file: Optional[Path] = None) -> logging.Logger:
         """Set up the logger with consistent formatting."""
@@ -209,10 +236,10 @@ class UrbanHeatIslandAnalyzer:
                 "hot_spots": hot_spots,
             }
 
-            # Phase 7: Enhance weather data (optional)
+            # Phase 7: Standardize weather data (optional)
             if weather_stations is not None:
-                self.logger.info("Phase 7: Enhancing weather data for UHI analysis")
-                weather_stations = enhance_weather_data_for_uhi(weather_stations, self.logger)
+                self.logger.info("Phase 7: Standardizing weather data for UHI analysis")
+                weather_stations = standardize_weather_data(weather_stations, self.logger)
 
             # Phase 8: Generate recommendations
             self.logger.info("Phase 8: Generating mitigation recommendations")
@@ -502,8 +529,8 @@ class UrbanHeatIslandAnalyzer:
         # Build German category descriptions
         category_descriptions = {}
         for category in landuse_processed[analysis_column].unique():
-            if category in CORINE_UHI_DESCRIPTIONS:
-                category_descriptions[category] = CORINE_UHI_DESCRIPTIONS[category]
+            if category in UHI_CATEGORY_DESCRIPTIONS:
+                category_descriptions[category] = UHI_CATEGORY_DESCRIPTIONS[category]
             else:
                 category_descriptions[category] = f"Unbekannte Kategorie: {category}"
         
@@ -858,7 +885,7 @@ class UrbanHeatIslandAnalyzer:
         if hotspots.empty:
             recommendations.append({
                 'strategy': 'Präventive Maßnahmen',
-                'description': 'Keine akuten Hitzeinseln identifiziert. Empfehlung für präventive Stadtbegrünung zur langfristigen Vermeidung von Wärmeinseln.',
+                'description': 'Keine Hitzeinseln identifiziert. Empfehlung für präventive Stadtbegrünung zur Vermeidung von Wärmeinseln.',
                 'priority': 'low',
                 'category': 'prevention'
             })
@@ -903,7 +930,7 @@ class UrbanHeatIslandAnalyzer:
             # Wenige isolierte Hotspots -> Mikro-Interventionen
             recommendations.append({
                 'strategy': 'Punktuelle Kühlungsmaßnahmen',
-                'description': f'{total_hotspots} isolierte Hitzezellen identifiziert. Gezielte Einzelmaßnahmen: Schattenspendende Bäume, kleine Grüninseln und vertikale Begrünungselemente für lokale Abkühlung.',
+                'description': f'{total_hotspots} isolierte Hitzezellen identifiziert. Empfehlung: Einzelbäume, kleine Grünstreifen und vertikale Begrünung.',
                 'priority': 'medium',
                 'category': 'micro_interventions',
                 'affected_areas': total_hotspots
@@ -913,8 +940,8 @@ class UrbanHeatIslandAnalyzer:
             # Moderate Anzahl -> kleinere Cluster, Quartiersansätze
             avg_cluster_size = total_hotspots // max(1, total_hotspots // 5)  # Geschätzte Cluster
             recommendations.append({
-                'strategy': 'Nachbarschafts-Kühlungskonzept',
-                'description': f'{total_hotspots} Hitzezellen in ca. {total_hotspots // max(1, avg_cluster_size)} Quartiersbereichen lokalisiert. Integrierte Nachbarschaftslösungen: Grüne Nachbarschaftsplätze, extensive Dachbegrünung und klimaresiliente Straßenraumgestaltung.',
+                'strategy': 'Quartiersansätze',
+                'description': f'{total_hotspots} Hitzezellen in ca. {total_hotspots // max(1, avg_cluster_size)} Bereichen. Empfehlung: Pocket Parks, Dachbegrünung und klimaresiliente Straßengestaltung.',
                 'priority': 'high',
                 'category': 'neighborhood_interventions', 
                 'affected_areas': total_hotspots
@@ -924,8 +951,8 @@ class UrbanHeatIslandAnalyzer:
             # Viele Hotspots -> größere zusammenhängende Bereiche
             estimated_clusters = max(1, total_hotspots // 10)  # Geschätzte große Cluster
             recommendations.append({
-                'strategy': 'Stadtweite Kühlanlagen-Infrastruktur',
-                'description': f'{total_hotspots} Hitzezellen in ca. {estimated_clusters} Großbereichen konzentriert. Strategische Großmaßnahmen erforderlich: Vernetzte Grünkorridore, urbane Wasserlandschaften und großflächige Verschattungsstrukturen.',
+                'strategy': 'Strategische Grüninfrastruktur',
+                'description': f'{total_hotspots} Hitzezellen in ca. {estimated_clusters} Großbereichen. Empfehlung: Grünkorridore, urbane Wasserflächen und großflächige Verschattung.',
                 'priority': 'critical',
                 'category': 'strategic_interventions',
                 'affected_areas': total_hotspots
@@ -934,8 +961,8 @@ class UrbanHeatIslandAnalyzer:
         # Zusätzliche Empfehlung basierend auf Hotspot-Dichte
         if total_hotspots > 50:
             recommendations.append({
-                'strategy': 'Integriertes Stadtklima-Managementsystem',
-                'description': f'Kritische Überhitzung mit {total_hotspots} Hitzezellen erfordert koordinierte Gesamtstrategie. Sofortiges Handeln: Multifaktorielle Kühlungsapproach mit vernetzten Grün-Blau-Infrastrukturen und klimaadaptivem Stadtdesign.',
+                'strategy': 'Stadtweites Kühlungskonzept',
+                'description': f'{total_hotspots} Hitzezellen erfordern koordinierte Gesamtstrategie. Empfehlung: Vernetzte Grün-Blau-Infrastruktur und klimaadaptives Stadtdesign.',
                 'priority': 'critical',
                 'category': 'city_wide_cooling',
                 'affected_areas': total_hotspots
@@ -958,8 +985,8 @@ class UrbanHeatIslandAnalyzer:
         
         if weak_hotspots > 0:
             recommendations.append({
-                'strategy': 'Moderate Hitzeregulierung',
-                'description': f'{weak_hotspots} Bereiche mit moderater Überwärmung identifiziert. Kosteneffektive Sofortmaßnahmen: Aufhellung von Oberflächen, strategische Verschattungselemente und gezielte Neupflanzungen zur Temperaturstabilisierung.',
+                'strategy': 'Moderate Kühlungsmaßnahmen',
+                'description': f'{weak_hotspots} Bereiche mit moderater Überwärmung. Empfehlung: Helle Oberflächen, Verschattung und gezielte Begrünung.',
                 'priority': 'medium',
                 'category': 'prevention',
                 'affected_areas': weak_hotspots
@@ -967,8 +994,8 @@ class UrbanHeatIslandAnalyzer:
             
         if strong_hotspots > 0:
             recommendations.append({
-                'strategy': 'Intensive Hitzeminderungsmaßnahmen',
-                'description': f'{strong_hotspots} kritische Überhitzungsbereiche (>{mean_temp + 1:.1f}°C) erfordern umgehende Intervention. Mehrschichtige Kühlung: Kombinationsstrategie aus intensiver Begrünung, Wasserelementen zur Verdunstungskühlung und großflächiger Verschattung.',
+                'strategy': 'Intensive Kühlungsmaßnahmen',
+                'description': f'{strong_hotspots} starke Hitzeinseln (>{mean_temp + 1:.1f}°C). Empfehlung: Kombinierte Strategien aus Begrünung, Wasserelementen und Verschattung.',
                 'priority': 'critical',
                 'category': 'acute_intervention',
                 'affected_areas': strong_hotspots
@@ -983,28 +1010,28 @@ class UrbanHeatIslandAnalyzer:
         # Landnutzungs-spezifische Empfehlungsmatrix
         landuse_strategies = {
             'dichte_bebauung': {
-                'strategy': 'Verdichtete Stadtgebiete klimaresistent gestalten',
-                'description': 'Hochversiegelte Innenstadt-Bereiche: Intensive Dach- und Fassadenbegrünung, klimaoptimierte Baumaterialien mit hoher Albedo, vertikale Gartensysteme und mikroklimatische Kühlzonen schaffen.',
+                'strategy': 'Urbane Verdichtung kühlen',
+                'description': 'Dicht bebaute Bereiche: Dach- und Fassadenbegrünung, kühle Materialien und vertikale Gärten.',
                 'priority': 'critical'
             },
             'wohngebiete': {
-                'strategy': 'Wohnquartiere klimaadaptiv optimieren',
-                'description': 'Überhitzte Wohnbereiche: Straßenbegleitende Baumalleen, Förderung privater Gartenbegrünung, Entsiegelung von Innenhöfen und Installation von Wasserspielen zur Verdunstungskühlung.',
+                'strategy': 'Wohnquartiere optimieren',
+                'description': 'Wohnbereiche: Straßenbäume, private Gartenbegrünung, Hofentsiegelung und Wasserspiele.',
                 'priority': 'high'
             },
             'industrie': {
-                'strategy': 'Gewerbeflächen thermisch optimieren',
-                'description': 'Industriestandorte mit Überhitzung: Großflächige extensive Dachbegrünung, wasserdurchlässige Oberflächengestaltung von Betriebsflächen und industriespezifische Verschattungsanlagen implementieren.',
+                'strategy': 'Gewerbeflächen optimieren',
+                'description': 'Industriegebiete: Extensive Dachbegrünung, Parkplatzentsiegelung und Verschattungsanlagen.',
                 'priority': 'high'
             },
             'verkehrsflaechen': {
-                'strategy': 'Verkehrsinfrastruktur klimaoptimiert umgestalten',
-                'description': 'Überhitzte Verkehrsbereiche: Intensives Straßenbegleitgrün, thermisch optimierte helle Fahrbahnbeläge und systematische Baumalleen entlang von Hauptverkehrsadern etablieren.',
+                'strategy': 'Verkehrsflächen kühlen',
+                'description': 'Verkehrsbereiche: Straßenbegleitgrün, helle Fahrbahnbeläge und Baumalleen.',
                 'priority': 'medium'
             },
             'staedtisches_gruen': {
-                'strategy': 'Bestehende Grünflächen klimafunktional stärken',
-                'description': 'Unterperformende Grünbereiche: Bewässerungsintensivierung für optimale Verdunstungskühlung, Nachpflanzung schattenspendender Großbäume und Integration zusätzlicher Wasserflächen zur Mikroklima-Verbesserung.',
+                'strategy': 'Grünflächen stärken',
+                'description': 'Grünbereiche: Verstärkte Bewässerung, schattenspendende Bäume und Wasserflächen.',
                 'priority': 'low'
             }
         }
@@ -1018,7 +1045,7 @@ class UrbanHeatIslandAnalyzer:
             for landuse, count in dominant_landuses.items():
                 if landuse in landuse_strategies:
                     strategy = landuse_strategies[landuse].copy()
-                    strategy['description'] += f' (Betrifft {count} identifizierte Flächeneinheiten)'
+                    strategy['description'] += f' ({count} Flächen betroffen)'
                     strategy['category'] = 'landuse_specific'
                     strategy['landuse_type'] = landuse
                     recommendations.append(strategy)
@@ -1042,8 +1069,8 @@ class UrbanHeatIslandAnalyzer:
                 if correlation_value > 0.6:
                     if category in ['dichte_bebauung', 'verkehrsflaechen', 'industrie']:
                         recommendations.append({
-                            'strategy': 'Evidenzbasierte Entsiegelungsstrategie',
-                            'description': f'Statistisch signifikante Überhitzungskorrelation bei {category} (r={correlation_value:.2f}). Datengestützte Priorität: Systematische Flächenentsiegelung und Implementierung reflektierender Materialsysteme.',
+                            'strategy': 'Entsiegelungsstrategie',
+                            'description': f'Starke Temperaturkorrelation bei {category} (r={correlation_value:.2f}). Empfehlung: Entsiegelung und reflektierende Materialien.',
                             'priority': 'critical',
                             'category': 'desealing',
                             'correlation_strength': correlation_value,
@@ -1056,15 +1083,15 @@ class UrbanHeatIslandAnalyzer:
                     if category in ['wald', 'wasser', 'staedtisches_gruen']:
                         # Bessere Kategoriebeschreibung
                         category_names = {
-                            'wald': 'natürlichen Vegetationsflächen und Waldgebieten',
-                            'wasser': 'Gewässerflächen und Wasserlandschaften', 
-                            'staedtisches_gruen': 'städtischen Grünflächen und Parkanlagen'
+                            'wald': 'Wald und natürlicher Vegetation',
+                            'wasser': 'Gewässern', 
+                            'staedtisches_gruen': 'städtischem Grün'
                         }
                         category_display = category_names.get(category, category)
                         
                         recommendations.append({
-                            'strategy': 'Bewährte Kühlungsressourcen systematisch ausbauen',
-                            'description': f'Nachgewiesene Kühlungsleistung bei {category_display} (r={correlation_value:.2f}). Strategische Empfehlung: Schutz und zielgerichtete Flächenerweiterung dieser klimawirksamen Strukturen.',
+                            'strategy': 'Kühlflächen ausbauen',
+                            'description': f'Kühlende Wirkung bei {category_display} (r={correlation_value:.2f}). Empfehlung: Schutz und Erweiterung dieser Flächen.',
                             'priority': 'high',
                             'category': 'cooling_enhancement',
                             'correlation_strength': abs(correlation_value),
@@ -1074,8 +1101,8 @@ class UrbanHeatIslandAnalyzer:
         # Fallback-Empfehlung wenn keine starken Korrelationen gefunden
         if not high_correlation_found and correlations:
             recommendations.append({
-                'strategy': 'Multifaktorielle Klimaanpassungsstrategie',
-                'description': 'Moderate Temperaturzusammenhänge in verschiedenen Landnutzungstypen identifiziert. Ausgewogener Lösungsansatz: Integrierte Kombination aus strategischer Begrünung, mikroklimatischer Verschattung und thermischer Oberflächenoptimierung.',
+                'strategy': 'Integrierte Kühlung',
+                'description': 'Moderate Temperaturkorrelationen gefunden. Empfehlung: Kombinierte Ansätze aus Begrünung, Verschattung und Oberflächenmodifikation.',
                 'priority': 'medium',
                 'category': 'integrated_cooling'
             })
