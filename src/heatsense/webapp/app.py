@@ -9,14 +9,10 @@ visualization. Built with Flask and modern web technologies.
 
 import logging
 import os
-import sys
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request, session
 from flask_cors import CORS
-
-# Add project root to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from heatsense.config.settings import UHI_PERFORMANCE_MODES
 from heatsense.webapp.analysis_backend import UHIAnalysisBackend
