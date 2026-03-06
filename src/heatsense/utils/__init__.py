@@ -13,8 +13,8 @@ from heatsense.utils.data_processor import (
 )
 
 __all__ = [
-    'process_corine_for_uhi',
-    'standardize_weather_data',
-    'UHI_CATEGORY_DESCRIPTIONS',
-    'UHI_IMPERVIOUSNESS_COEFFICIENTS'
-] 
+    "process_corine_for_uhi",
+    "standardize_weather_data",
+    "UHI_CATEGORY_DESCRIPTIONS",
+    "UHI_IMPERVIOUSNESS_COEFFICIENTS",
+]
