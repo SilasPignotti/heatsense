@@ -13,13 +13,13 @@ A comprehensive tool for analyzing urban heat island effects using satellite ima
 
 ## Features
 
-- **🛰️ Satellite Analysis**: Landsat thermal band processing via Google Earth Engine
-- **🌡️ Weather Validation**: DWD weather station data integration for ground truth validation
-- **🏙️ Land Use Correlation**: CORINE land cover data correlation analysis
-- **📊 Spatial Analysis**: Advanced heat island hotspot identification and clustering
-- **🌐 Web Interface**: Modern Flask-based web application
-- **⚡ Multiple Performance Modes**: From quick preview to detailed analysis
-- **📱 Interactive Maps**: Real-time visualization with Leaflet maps
+- **Satellite Analysis**: Landsat thermal band processing via Google Earth Engine
+- **Weather Validation**: DWD weather station data integration for ground truth validation
+- **Land Use Correlation**: CORINE land cover data correlation analysis
+- **Spatial Analysis**: Advanced heat island hotspot identification and clustering
+- **Web Interface**: Modern Flask-based web application
+- **Multiple Performance Modes**: From quick preview to detailed analysis
+- **Interactive Maps**: Real-time visualization with Leaflet maps
 
 ## Quick Start
 
@@ -127,8 +127,8 @@ print(f"Hotspots found: {result['data']['summary']['hotspots_count']}")
 
 ```
 HeatSense/
-├── run_webapp.py          # 🎯 Launch web application
-├── run_analysis.py        # 🎯 CLI analysis tool
+├── run_webapp.py          # Launch web application
+├── run_analysis.py        # CLI analysis tool
 ├── pyproject.toml         # Python project configuration
 ├── .env.example           # Environment variables template
 ├── src/
@@ -144,10 +144,10 @@ HeatSense/
 
 ## Data Sources
 
-- **🛰️ Satellite Data**: Landsat 8 thermal imagery (Google Earth Engine)
-- **🌡️ Weather Data**: DWD (German Weather Service) station network
-- **🏙️ Land Use Data**: CORINE Land Cover (European Environment Agency)
-- **🗺️ Administrative Boundaries**: Berlin WFS services
+- **Satellite Data**: Landsat 8 thermal imagery (Google Earth Engine)
+- **Weather Data**: DWD (German Weather Service) station network
+- **Land Use Data**: CORINE Land Cover (European Environment Agency)
+- **Administrative Boundaries**: Berlin WFS services
 
 ## Examples
 
