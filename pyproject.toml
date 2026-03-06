@@ -83,3 +83,10 @@ ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["heatsense"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+include = ["src"]
