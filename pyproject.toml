@@ -96,3 +96,8 @@ venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
 include = ["src"]
+exclude = [
+    "src/heatsense/data",
+    "src/heatsense/utils/data_processor.py",
+    "src/heatsense/webapp/analysis_backend.py",
+]

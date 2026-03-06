@@ -143,8 +143,8 @@ class CorineDataDownloader:
                     try:
                         dt = datetime.strptime(date_input, "%Y-%m")
                         return dt.year
-                    except ValueError:
-                        raise ValueError(f"Invalid date format: {date_input}")
+                    except ValueError as exc:
+                        raise ValueError(f"Invalid date format: {date_input}") from exc
             else:
                 raise ValueError(f"Unknown date format: {date_input}")
         else:

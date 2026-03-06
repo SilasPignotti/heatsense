@@ -89,8 +89,10 @@ def validate_date_format(date_string: str) -> datetime:
     """Validate date string format and convert to datetime object."""
     try:
         return datetime.strptime(date_string, "%Y-%m-%d")
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Invalid date format: {date_string}. Use YYYY-MM-DD")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"Invalid date format: {date_string}. Use YYYY-MM-DD"
+        ) from exc
 
 
 def save_geojson_outputs(result_data: dict, analysis_id: str, output_dir: Path) -> None:
@@ -134,7 +136,7 @@ def print_analysis_summary(result: dict) -> None:
 
     # Execution time
     execution_time = result.get("execution_time", "N/A")
-    if isinstance(execution_time, (int, float)):
+    if isinstance(execution_time, int | float):
         print(f"   • Execution time: {execution_time:.1f}s")
     else:
         print(f"   • Execution time: {execution_time}")

@@ -202,7 +202,7 @@ class WFSDataDownloader:
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Failed to parse WFS response: {e}")
-            raise ValueError(f"Unable to parse WFS response as GeoDataFrame: {e}")
+            raise ValueError(f"Unable to parse WFS response as GeoDataFrame: {e}") from e
 
         if gdf.empty:
             if self.logger:

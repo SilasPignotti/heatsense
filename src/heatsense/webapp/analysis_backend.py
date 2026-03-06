@@ -68,7 +68,7 @@ class UHIAnalysisBackend:
             return int(obj)
         elif isinstance(obj, (np.floating, np.float16, np.float32, np.float64)):
             return float(obj)
-        elif isinstance(obj, np.ndarray) or isinstance(obj, pd.Series):
+        elif isinstance(obj, (np.ndarray, pd.Series)):
             return obj.tolist()
         elif isinstance(obj, dict):
             return {key: self._convert_to_json_serializable(value) for key, value in obj.items()}

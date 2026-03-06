@@ -11,5 +11,5 @@ def lint(session):
 @nox.session
 def typecheck(session):
     session.install("pyright")
-    session.install("-e", ".[dev]")
+    session.install("--no-deps", "-e", ".")
     session.run("pyright")

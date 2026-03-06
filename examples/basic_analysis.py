@@ -21,8 +21,6 @@ current_dir = Path(__file__).parent.parent
 src_dir = current_dir / "src"
 sys.path.insert(0, str(src_dir))
 
-from heatsense.webapp.analysis_backend import UHIAnalysisBackend
-
 
 def display_temperature_analysis(temp_data: dict) -> None:
     """Display temperature analysis statistics."""
@@ -131,6 +129,8 @@ def process_analysis_results(result: dict) -> None:
 
 def main():
     """Execute basic UHI analysis example."""
+    from heatsense.webapp.analysis_backend import UHIAnalysisBackend
+
     print("🔥 HeatSense Basic Analysis Example")
     print("=" * 50)
 

@@ -140,7 +140,7 @@ class UrbanHeatIslandAnalyzer:
             self.logger.info(
                 "Please ensure you have proper Earth Engine credentials and project access."
             )
-            raise RuntimeError(f"Earth Engine initialization failed: {str(e)}")
+            raise RuntimeError(f"Earth Engine initialization failed: {str(e)}") from e
 
     def analyze_heat_islands(
         self,
@@ -286,7 +286,7 @@ class UrbanHeatIslandAnalyzer:
             return gdf
         except Exception as e:
             self.logger.error(f"Error loading {data_type}: {str(e)}")
-            raise ValueError(f"Error loading {data_type}: {str(e)}")
+            raise ValueError(f"Error loading {data_type}: {str(e)}") from e
 
     def _get_landsat_collection(
         self, geometry: gpd.GeoSeries, date_range: tuple[date, date]
@@ -336,7 +336,7 @@ class UrbanHeatIslandAnalyzer:
         )
 
         # Calculate various statistics
-        stats = temp_image.reduceRegion(
+        temp_image.reduceRegion(
             reducer=ee.Reducer.percentile([10, 25, 50, 75, 90])
             .combine(ee.Reducer.mean(), None, True)
             .combine(ee.Reducer.stdDev(), None, True),
@@ -344,10 +344,6 @@ class UrbanHeatIslandAnalyzer:
             scale=30,  # Analysis scale in meters
             maxPixels=1e9,  # Maximum pixels for Earth Engine operations
         ).getInfo()
-
-        # Log temperature statistics
-        if stats:
-            temp_band_key = "ST_B10_mean"
 
         # Create spatial grid for detailed analysis
         self.logger.info("Creating analysis grid for spatial analysis")
@@ -1133,26 +1129,29 @@ class UrbanHeatIslandAnalyzer:
                         high_correlation_found = True
 
                 # Starke negative Korrelation -> kühlend, erhalten/verstärken
-                elif correlation_value < -0.4:
-                    if category in ["wald", "wasser", "staedtisches_gruen"]:
-                        # Bessere Kategoriebeschreibung
-                        category_names = {
-                            "wald": "Wald und natürlicher Vegetation",
-                            "wasser": "Gewässern",
-                            "staedtisches_gruen": "städtischem Grün",
-                        }
-                        category_display = category_names.get(category, category)
+                elif correlation_value < -0.4 and category in [
+                    "wald",
+                    "wasser",
+                    "staedtisches_gruen",
+                ]:
+                    # Bessere Kategoriebeschreibung
+                    category_names = {
+                        "wald": "Wald und natürlicher Vegetation",
+                        "wasser": "Gewässern",
+                        "staedtisches_gruen": "städtischem Grün",
+                    }
+                    category_display = category_names.get(category, category)
 
-                        recommendations.append(
-                            {
-                                "strategy": "Kühlflächen ausbauen",
-                                "description": f"Kühlende Wirkung bei {category_display} (r={correlation_value:.2f}). Empfehlung: Schutz und Erweiterung dieser Flächen.",
-                                "priority": "high",
-                                "category": "cooling_enhancement",
-                                "correlation_strength": abs(correlation_value),
-                                "landuse_type": category,
-                            }
-                        )
+                    recommendations.append(
+                        {
+                            "strategy": "Kühlflächen ausbauen",
+                            "description": f"Kühlende Wirkung bei {category_display} (r={correlation_value:.2f}). Empfehlung: Schutz und Erweiterung dieser Flächen.",
+                            "priority": "high",
+                            "category": "cooling_enhancement",
+                            "correlation_strength": abs(correlation_value),
+                            "landuse_type": category,
+                        }
+                    )
 
         # Fallback-Empfehlung wenn keine starken Korrelationen gefunden
         if not high_correlation_found and correlations:
