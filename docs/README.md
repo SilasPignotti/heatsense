@@ -15,4 +15,4 @@ This folder contains short reference notes for the core public components of Hea
 - Frontend static assets
 - Repetition of configuration already covered in `README.md` and `pyproject.toml`
 
-If you are new to the project, start with the repository `README.md` first.
+If you are new to the project, start with the repository `README.md` first, then use this folder as the short module reference index.
