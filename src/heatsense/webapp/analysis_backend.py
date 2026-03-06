@@ -18,7 +18,7 @@ import json
 import logging
 import time
 from datetime import date, datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 import geopandas as gpd
 import numpy as np
@@ -82,9 +82,7 @@ class UHIAnalysisBackend:
             return int(obj)
         elif isinstance(obj, (np.floating, np.float16, np.float32, np.float64)):
             return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, pd.Series):
+        elif isinstance(obj, np.ndarray) or isinstance(obj, pd.Series):
             return obj.tolist()
         elif isinstance(obj, dict):
             return {key: self._convert_to_json_serializable(value) for key, value in obj.items()}
@@ -97,7 +95,7 @@ class UHIAnalysisBackend:
 
     def analyze(
         self, area: str, start_date: str, end_date: str, performance_mode: str = "standard"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute comprehensive Urban Heat Island analysis.
 
@@ -279,7 +277,7 @@ class UHIAnalysisBackend:
         else:
             return "locality_boundary"
 
-    def _download_boundary_data(self, area: str) -> Optional[gpd.GeoDataFrame]:
+    def _download_boundary_data(self, area: str) -> gpd.GeoDataFrame | None:
         """Download geographical boundary data for the specified area."""
         try:
             boundary_type = self._get_boundary_type(area)
@@ -336,7 +334,7 @@ class UHIAnalysisBackend:
 
     def _download_landcover_data(
         self, boundary_data: gpd.GeoDataFrame, start_date: date, end_date: date
-    ) -> Optional[gpd.GeoDataFrame]:
+    ) -> gpd.GeoDataFrame | None:
         """Download CORINE Land Cover data for the boundary area."""
         try:
             # Convert dates for CORINE downloader compatibility
@@ -413,7 +411,7 @@ class UHIAnalysisBackend:
         self.logger.info(f"🚀 Created analyzer with {performance_mode} mode configuration")
         return analyzer
 
-    def _process_analysis_results(self, analysis_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_analysis_results(self, analysis_results: dict[str, Any]) -> dict[str, Any]:
         """Process and structure analysis results for API consumption."""
         processed = {
             "summary": {},
@@ -453,7 +451,7 @@ class UHIAnalysisBackend:
         return processed
 
     def _process_temperature_data(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process temperature statistics and grid data."""
         if "temperature_statistics" not in analysis_results:
@@ -487,7 +485,7 @@ class UHIAnalysisBackend:
         }
 
     def _process_hotspots_data(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process heat island hotspots identification results."""
         if "hot_spots" not in analysis_results:
@@ -511,7 +509,7 @@ class UHIAnalysisBackend:
         }
 
     def _process_landuse_correlation(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process land use correlation analysis results."""
         if "land_use_correlation" not in analysis_results:
@@ -530,7 +528,7 @@ class UHIAnalysisBackend:
         }
 
     def _process_weather_stations(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process weather station validation data."""
         weather_data = analysis_results.get("raw_weather_stations")
@@ -570,7 +568,7 @@ class UHIAnalysisBackend:
             self.logger.warning(f"Weather station data processing failed: {e}")
 
     def _process_recommendations(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process mitigation recommendations."""
         if "mitigation_recommendations" not in analysis_results:
@@ -589,7 +587,7 @@ class UHIAnalysisBackend:
             processed["recommendations"] = recommendations
 
     def _process_boundary_data(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process geographical boundary data."""
         if "boundary_data" not in analysis_results:
@@ -605,7 +603,7 @@ class UHIAnalysisBackend:
             self.logger.warning(f"Boundary data processing failed: {e}")
 
     def _process_landcover_data(
-        self, analysis_results: Dict[str, Any], processed: Dict[str, Any]
+        self, analysis_results: dict[str, Any], processed: dict[str, Any]
     ) -> None:
         """Process land cover data for visualization."""
         landcover_data = analysis_results.get("raw_landcover_data")
@@ -684,7 +682,7 @@ class UHIAnalysisBackend:
         landcover_data["impervious_coefficient"] = 0.3
         landcover_data["land_use_description"] = "Unknown Land Use"
 
-    def _generate_analysis_summary(self, processed: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_analysis_summary(self, processed: dict[str, Any]) -> dict[str, Any]:
         """Generate comprehensive analysis summary."""
         summary = {
             "analysis_type": "Urban Heat Island Analysis",
@@ -709,8 +707,8 @@ class UHIAnalysisBackend:
         return summary
 
     def _get_performance_metrics(
-        self, analysis_results: Dict[str, Any], execution_time: float, performance_mode: str
-    ) -> Dict[str, Any]:
+        self, analysis_results: dict[str, Any], execution_time: float, performance_mode: str
+    ) -> dict[str, Any]:
         """Generate performance metrics for analysis assessment."""
         temp_stats = analysis_results.get("temperature_statistics")
 

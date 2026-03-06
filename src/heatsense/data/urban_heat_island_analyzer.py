@@ -26,7 +26,6 @@ import logging
 import warnings
 from datetime import date, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import ee
 import esda
@@ -44,7 +43,6 @@ from heatsense.config.settings import (
 )
 from heatsense.utils.data_processor import (
     UHI_CATEGORY_DESCRIPTIONS,
-    UHI_IMPERVIOUSNESS_COEFFICIENTS,
     process_corine_for_uhi,
     standardize_weather_data,
 )
@@ -90,8 +88,8 @@ class UrbanHeatIslandAnalyzer:
         hotspot_threshold: float = 0.9,
         min_cluster_size: int = 5,
         use_grouped_categories: bool = True,
-        log_file: Optional[Path] = None,
-        logger: Optional[logging.Logger] = None,
+        log_file: Path | None = None,
+        logger: logging.Logger | None = None,
     ):
         """Initialize the Urban Heat Island analyzer with specified configuration."""
         self.cloud_threshold = cloud_cover_threshold
@@ -103,7 +101,7 @@ class UrbanHeatIslandAnalyzer:
         self.logger = logger or self._setup_logger(log_file)
         self.logger.info("UHI Analyzer initialized with custom configuration")
 
-    def _setup_logger(self, log_file: Optional[Path] = None) -> logging.Logger:
+    def _setup_logger(self, log_file: Path | None = None) -> logging.Logger:
         """Set up the logger with consistent formatting."""
         logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         logger.setLevel(getattr(logging, UHI_LOG_LEVEL))
@@ -141,7 +139,7 @@ class UrbanHeatIslandAnalyzer:
 
         return logger
 
-    def initialize_earth_engine(self, project: Optional[str] = None) -> None:
+    def initialize_earth_engine(self, project: str | None = None) -> None:
         """
         Initialize Google Earth Engine with error handling.
 
@@ -170,11 +168,11 @@ class UrbanHeatIslandAnalyzer:
 
     def analyze_heat_islands(
         self,
-        city_boundary: Union[str, gpd.GeoDataFrame],
-        date_range: Tuple[date, date],
-        landuse_data: Union[str, gpd.GeoDataFrame],
-        weather_stations: Optional[gpd.GeoDataFrame] = None,
-    ) -> Dict:
+        city_boundary: str | gpd.GeoDataFrame,
+        date_range: tuple[date, date],
+        landuse_data: str | gpd.GeoDataFrame,
+        weather_stations: gpd.GeoDataFrame | None = None,
+    ) -> dict:
         """
         Perform comprehensive urban heat island analysis.
 
@@ -267,7 +265,7 @@ class UrbanHeatIslandAnalyzer:
             )
             raise
 
-    def _log_analysis_summary(self, results: Dict) -> None:
+    def _log_analysis_summary(self, results: dict) -> None:
         """Log a summary of analysis results."""
         try:
             temp_stats = results.get("temperature_statistics", gpd.GeoDataFrame())
@@ -296,7 +294,7 @@ class UrbanHeatIslandAnalyzer:
         except Exception as e:
             self.logger.warning(f"Error logging analysis summary: {str(e)}")
 
-    def _load_geodata(self, data: Union[str, gpd.GeoDataFrame], data_type: str) -> gpd.GeoDataFrame:
+    def _load_geodata(self, data: str | gpd.GeoDataFrame, data_type: str) -> gpd.GeoDataFrame:
         """Load and validate geospatial data."""
         try:
             if isinstance(data, str):
@@ -315,7 +313,7 @@ class UrbanHeatIslandAnalyzer:
             raise ValueError(f"Error loading {data_type}: {str(e)}")
 
     def _get_landsat_collection(
-        self, geometry: gpd.GeoSeries, date_range: Tuple[date, date]
+        self, geometry: gpd.GeoSeries, date_range: tuple[date, date]
     ) -> ee.ImageCollection:
         """Get and filter Landsat collection."""
         try:
@@ -520,8 +518,8 @@ class UrbanHeatIslandAnalyzer:
         self,
         temp_data: gpd.GeoDataFrame,
         landuse: gpd.GeoDataFrame,
-        use_grouped_categories: Optional[bool] = None,
-    ) -> Dict:
+        use_grouped_categories: bool | None = None,
+    ) -> dict:
         """
         Analyze correlation between land use and temperature using German UHI categories.
         Args:
@@ -759,7 +757,7 @@ class UrbanHeatIslandAnalyzer:
 
     def _validate_with_ground_data(
         self, satellite_temps: gpd.GeoDataFrame, station_data: gpd.GeoDataFrame
-    ) -> Dict:
+    ) -> dict:
         """Validate satellite temperatures with ground measurements."""
         self.logger.info("Validating satellite data with ground weather stations")
 
@@ -928,7 +926,7 @@ class UrbanHeatIslandAnalyzer:
                 else None,
             }
 
-    def _generate_recommendations(self, results: Dict) -> List[Dict]:
+    def _generate_recommendations(self, results: dict) -> list[dict]:
         """Generate comprehensive mitigation recommendations based on analysis results."""
         self.logger.info("Generating comprehensive mitigation recommendations")
         recommendations = []
@@ -970,7 +968,7 @@ class UrbanHeatIslandAnalyzer:
         )
         return recommendations
 
-    def _generate_size_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> List[Dict]:
+    def _generate_size_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> list[dict]:
         """Generate recommendations based on hotspot cluster sizes (number of grid cells)."""
         recommendations = []
 
@@ -1038,7 +1036,7 @@ class UrbanHeatIslandAnalyzer:
 
         return recommendations
 
-    def _generate_intensity_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> List[Dict]:
+    def _generate_intensity_based_recommendations(self, hotspots: gpd.GeoDataFrame) -> list[dict]:
         """Generate recommendations based on temperature intensity."""
         recommendations = []
 
@@ -1076,8 +1074,8 @@ class UrbanHeatIslandAnalyzer:
         return recommendations
 
     def _generate_landuse_specific_recommendations(
-        self, hotspots: gpd.GeoDataFrame, results: Dict
-    ) -> List[Dict]:
+        self, hotspots: gpd.GeoDataFrame, results: dict
+    ) -> list[dict]:
         """Generate recommendations based on dominant land use in hotspot areas."""
         recommendations = []
 
@@ -1130,7 +1128,7 @@ class UrbanHeatIslandAnalyzer:
 
         return recommendations
 
-    def _generate_correlation_based_recommendations(self, landuse_correlation: Dict) -> List[Dict]:
+    def _generate_correlation_based_recommendations(self, landuse_correlation: dict) -> list[dict]:
         """Generate recommendations based on land use temperature correlations."""
         recommendations = []
 

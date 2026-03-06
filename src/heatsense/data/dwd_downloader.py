@@ -15,7 +15,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import geopandas as gpd
 import numpy as np
@@ -51,7 +51,7 @@ class DWDDataDownloader:
         interpolation_method: str = "linear",
         interpolate_by_default: bool = True,
         interpolation_resolution: float = 30,
-        log_file: Optional[str] = None,
+        log_file: str | None = None,
         verbose: bool = True,
     ):
         self.buffer_distance = buffer_distance
@@ -71,7 +71,7 @@ class DWDDataDownloader:
                 f"interpolation={self.interpolation_method}"
             )
 
-    def _setup_logger(self, log_file: Optional[str] = None) -> logging.Logger:
+    def _setup_logger(self, log_file: str | None = None) -> logging.Logger:
         """Configure logging with console and optional file output."""
         logger = logging.getLogger(f"{__name__}.DWDDataDownloader")
 
@@ -95,16 +95,16 @@ class DWDDataDownloader:
         return logger
 
     def _create_geometry_from_geojson(
-        self, geojson: Union[str, Dict[str, Any]]
-    ) -> Union[Point, Polygon, MultiPolygon]:
+        self, geojson: str | dict[str, Any]
+    ) -> Point | Polygon | MultiPolygon:
         """Convert GeoJSON to Shapely geometry object."""
         if isinstance(geojson, str):
             geojson = json.loads(geojson)
         return shape(geojson)
 
     def _get_bounding_box_from_geometry(
-        self, geometry: Union[Point, Polygon, MultiPolygon]
-    ) -> Dict[str, float]:
+        self, geometry: Point | Polygon | MultiPolygon
+    ) -> dict[str, float]:
         """Extract geographic bounding box coordinates from geometry."""
         # Ensure geometry is in WGS84 for lat/lon coordinates
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
@@ -120,7 +120,7 @@ class DWDDataDownloader:
         }
 
     def _create_interpolation_grid(
-        self, geometry: Union[Point, Polygon, MultiPolygon], resolution: float = None
+        self, geometry: Point | Polygon | MultiPolygon, resolution: float = None
     ) -> gpd.GeoDataFrame:
         """Generate regular grid points within geometry for temperature interpolation."""
         resolution = resolution or self.interpolation_resolution
@@ -211,7 +211,7 @@ class DWDDataDownloader:
         return result_gdf
 
     def _get_stations_in_area(
-        self, geometry: Union[Point, Polygon, MultiPolygon]
+        self, geometry: Point | Polygon | MultiPolygon
     ) -> gpd.GeoDataFrame:
         """Find all weather stations within buffered study area."""
         # Apply spatial buffer in projected coordinates
@@ -337,12 +337,12 @@ class DWDDataDownloader:
 
     def download_for_area(
         self,
-        geometry: Union[Point, Polygon, MultiPolygon, str, Dict[str, Any], gpd.GeoDataFrame],
+        geometry: Point | Polygon | MultiPolygon | str | dict[str, Any] | gpd.GeoDataFrame,
         start_date: datetime,
         end_date: datetime,
-        interpolate: Optional[bool] = None,
+        interpolate: bool | None = None,
         resolution: float = None,
-    ) -> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]]:
+    ) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
         """
         Download weather data for specified area and time period.
 

@@ -13,7 +13,6 @@ Dependencies:
 """
 
 import logging
-from typing import Optional
 
 import geopandas as gpd
 
@@ -108,7 +107,7 @@ UHI_CATEGORY_DESCRIPTIONS = {
 
 
 def process_corine_for_uhi(
-    corine_gdf: gpd.GeoDataFrame, logger_instance: Optional[logging.Logger] = None
+    corine_gdf: gpd.GeoDataFrame, logger_instance: logging.Logger | None = None
 ) -> gpd.GeoDataFrame:
     """
     Transform CORINE Land Cover data for Urban Heat Island analysis.
@@ -204,7 +203,7 @@ def process_corine_for_uhi(
 
 
 def standardize_weather_data(
-    weather_gdf: gpd.GeoDataFrame, logger_instance: Optional[logging.Logger] = None
+    weather_gdf: gpd.GeoDataFrame, logger_instance: logging.Logger | None = None
 ) -> gpd.GeoDataFrame:
     """Standardize weather station data with consistent temperature column naming."""
     if logger_instance:

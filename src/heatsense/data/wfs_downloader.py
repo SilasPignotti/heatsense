@@ -14,7 +14,6 @@ Dependencies:
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlencode
 from xml.etree import ElementTree as ET
 
@@ -43,12 +42,12 @@ class WFSDataDownloader:
     def __init__(
         self,
         endpoint_url: str,
-        headers: Optional[dict] = None,
+        headers: dict | None = None,
         timeout: int = 30,
         max_features: int = 10000,
         retry_attempts: int = 3,
         retry_delay: int = 2,
-        log_file: Optional[str] = None,
+        log_file: str | None = None,
         verbose: bool = True,
     ):
         self.endpoint_url = endpoint_url.rstrip("/")
@@ -65,7 +64,7 @@ class WFSDataDownloader:
         if self.logger:
             self.logger.info(f"WFS Downloader initialized for {self.endpoint_url}")
 
-    def _setup_logger(self, log_file: Optional[str] = None) -> logging.Logger:
+    def _setup_logger(self, log_file: str | None = None) -> logging.Logger:
         """Configure logging with console and optional file output."""
         logger = logging.getLogger(f"{__name__}.WFSDataDownloader")
 
@@ -91,7 +90,7 @@ class WFSDataDownloader:
     def build_wfs_url(
         self,
         type_name: str,
-        max_features: Optional[int] = None,
+        max_features: int | None = None,
         output_format: str = "application/json",
         target_crs: str = "EPSG:4326",
     ) -> str:
@@ -166,8 +165,8 @@ class WFSDataDownloader:
     def download_to_geodataframe(
         self,
         type_name: str,
-        max_features: Optional[int] = None,
-        target_crs: Optional[str] = None,
+        max_features: int | None = None,
+        target_crs: str | None = None,
     ) -> gpd.GeoDataFrame:
         """
         Download WFS features and return as GeoDataFrame.

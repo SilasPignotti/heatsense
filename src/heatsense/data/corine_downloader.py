@@ -14,7 +14,6 @@ Dependencies:
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 from urllib.parse import urlencode
 
 import geopandas as gpd
@@ -44,14 +43,12 @@ class CorineDataDownloader:
 
     def __init__(
         self,
-        year_or_period: Union[
-            int, str, datetime, Tuple[Union[int, str, datetime], Union[int, str, datetime]]
-        ],
+        year_or_period: int | str | datetime | tuple[int | str | datetime, int | str | datetime],
         record_count: int = 1000,
         timeout: int = 30,
         verbose: bool = True,
-        log_file: Optional[str] = None,
-        corine_years: List[int] = CORINE_YEARS,
+        log_file: str | None = None,
+        corine_years: list[int] = CORINE_YEARS,
         corine_base_urls: dict = CORINE_BASE_URLS,
     ):
         self.record_count = record_count
@@ -75,7 +72,7 @@ class CorineDataDownloader:
                     f"Using CORINE {self.selected_year} for period {self.start_year}-{self.end_year}"
                 )
 
-    def _setup_logger(self, log_file: Optional[str] = None) -> logging.Logger:
+    def _setup_logger(self, log_file: str | None = None) -> logging.Logger:
         """Configure logging with console and optional file output."""
         logger = logging.getLogger(f"{__name__}.CorineDataDownloader")
 
@@ -116,10 +113,8 @@ class CorineDataDownloader:
 
     def _parse_year_or_period(
         self,
-        year_or_period: Union[
-            int, str, datetime, Tuple[Union[int, str, datetime], Union[int, str, datetime]]
-        ],
-    ) -> Tuple[int, int]:
+        year_or_period: int | str | datetime | tuple[int | str | datetime, int | str | datetime],
+    ) -> tuple[int, int]:
         """Parse various date input formats into start and end years."""
         if isinstance(year_or_period, tuple):
             start_year = self._extract_year(year_or_period[0])
@@ -129,7 +124,7 @@ class CorineDataDownloader:
             year = self._extract_year(year_or_period)
             return year, year
 
-    def _extract_year(self, date_input: Union[str, datetime, int]) -> int:
+    def _extract_year(self, date_input: str | datetime | int) -> int:
         """Extract year from various date input formats."""
         if isinstance(date_input, int):
             if date_input < 1900 or date_input > 2100:
@@ -161,8 +156,8 @@ class CorineDataDownloader:
             raise ValueError(f"Unsupported date input type: {type(date_input)}")
 
     def get_bbox_from_geometry(
-        self, geometry_input: Union[str, Path, gpd.GeoDataFrame]
-    ) -> Tuple[float, float, float, float]:
+        self, geometry_input: str | Path | gpd.GeoDataFrame
+    ) -> tuple[float, float, float, float]:
         """Extract bounding box from geometry and transform to Web Mercator projection."""
         if isinstance(geometry_input, (str, Path)):
             gdf = gpd.read_file(geometry_input)
@@ -191,7 +186,7 @@ class CorineDataDownloader:
 
     def build_query_url(
         self,
-        bbox: Tuple[float, float, float, float],
+        bbox: tuple[float, float, float, float],
         offset: int = 0,
         target_crs: str = "EPSG:4326",
     ) -> str:
@@ -213,7 +208,7 @@ class CorineDataDownloader:
         return f"{self.base_url}/query?{urlencode(params)}"
 
     def download_for_area(
-        self, geometry_input: Union[str, Path, gpd.GeoDataFrame], target_crs: str = "EPSG:4326"
+        self, geometry_input: str | Path | gpd.GeoDataFrame, target_crs: str = "EPSG:4326"
     ) -> gpd.GeoDataFrame:
         """
         Download CORINE Land Cover data for the specified geographical area.
@@ -317,7 +312,7 @@ class CorineDataDownloader:
         return self.selected_year
 
     @staticmethod
-    def get_available_years() -> List[int]:
+    def get_available_years() -> list[int]:
         """Get all available CORINE dataset years."""
         return sorted(CORINE_YEARS)
 
