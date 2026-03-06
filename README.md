@@ -160,7 +160,9 @@ uv run python examples/basic_analysis.py
 
 ## Documentation
 
-Detailed documentation in the `docs/` directory:
+Start with **[docs/README.md](docs/README.md)** for the short documentation index.
+
+Module references:
 
 - **[UrbanHeatIslandAnalyzer.md](docs/UrbanHeatIslandAnalyzer.md)** - Core analysis engine
 - **[DWDDataDownloader.md](docs/DWDDataDownloader.md)** - Weather data integration
