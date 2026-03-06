@@ -6,7 +6,7 @@ satellite data, meteorological observations, and land use information.
 
 Key components:
     - Urban Heat Island analysis engine
-    - Data downloaders for CORINE, DWD, and WFS services  
+    - Data downloaders for CORINE, DWD, and WFS services
     - Web interface for interactive analysis
     - Command-line tools for batch processing
 """

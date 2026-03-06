@@ -12,7 +12,7 @@ from .wfs_downloader import WFSDataDownloader
 
 __all__ = [
     "CorineDataDownloader",
-    "DWDDataDownloader", 
+    "DWDDataDownloader",
     "UrbanHeatIslandAnalyzer",
     "WFSDataDownloader",
-] 
+]

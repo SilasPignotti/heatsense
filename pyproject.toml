@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "HeatSense - Urban Heat Island Analyzer for climate research and heat mitigation planning"
 readme = "README.md"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Silas Pignotti", email = "pignottisilas@gmail.com"}
 ]
 license = {text = "MIT"}
 keywords = ["urban", "heat", "island", "climate", "satellite", "analysis"]
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Scientific/Engineering :: GIS",
 ]
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11"
 dependencies = [
     "fiona>=1.10.1",
     "geopandas>=1.1.0",
@@ -42,8 +42,6 @@ dependencies = [
     "seaborn>=0.12.0",
     "libpysal>=4.13.0",
     "esda>=2.7.0",
-    "ruff>=0.12.0",
-    "pytest>=7.0.0",
     "python-dotenv>=1.1.0",
     "plotly>=6.2.0",
     "folium>=0.20.0",
@@ -57,6 +55,14 @@ dependencies = [
     "flask-cors>=4.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.12.0",
+    "pytest>=7.0.0",
+    "pyright",
+    "nox",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
@@ -68,7 +74,30 @@ heatsense-webapp = "heatsense.webapp.run_webapp:main"
 heatsense-cli = "heatsense.webapp.analysis_backend:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/HeatSense"
-Repository = "https://github.com/your-username/HeatSense.git"
-Documentation = "https://github.com/your-username/HeatSense/docs"
-"Bug Reports" = "https://github.com/your-username/HeatSense/issues"
+Homepage = "https://github.com/silas-workspace/heatsense"
+Repository = "https://github.com/silas-workspace/heatsense.git"
+Documentation = "https://github.com/silas-workspace/heatsense/tree/main/docs"
+"Bug Reports" = "https://github.com/silas-workspace/heatsense/issues"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["heatsense"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+include = ["src"]
+exclude = [
+    "src/heatsense/data",
+    "src/heatsense/utils/data_processor.py",
+    "src/heatsense/webapp/analysis_backend.py",
+]

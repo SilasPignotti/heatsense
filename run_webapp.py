@@ -41,8 +41,7 @@ except ImportError as e:
 def configure_logging():
     """Set up logging configuration for the web application."""
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
 
@@ -61,22 +60,17 @@ def main():
     """Launch the HeatSense Flask web application."""
     configure_logging()
     display_startup_info()
-    
+
     # Determine environment configuration
-    is_development = os.environ.get('FLASK_ENV', 'production') == 'development'
-    
+    is_development = os.environ.get("FLASK_ENV", "production") == "development"
+
     if is_development:
         print("🔧 Running in DEVELOPMENT mode")
     else:
         print("🚀 Running in PRODUCTION mode")
-    
+
     try:
-        app.run(
-            host='0.0.0.0',
-            port=8000,
-            debug=is_development,
-            use_reloader=is_development
-        )
+        app.run(host="0.0.0.0", port=8000, debug=is_development, use_reloader=is_development)
     except KeyboardInterrupt:
         print("\n🛑 HeatSense webapp stopped by user")
     except Exception as e:
@@ -84,5 +78,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
