@@ -53,12 +53,15 @@ temp/
 logs/
 *.log
 *.geojson
+# Ignore local JSON outputs and credential files. If a JSON example is needed,
+# commit a non-sensitive *.example file instead of the real secret-bearing file.
 *.json
 *.shp
 *.shx
 *.dbf
 *.prj
 *.cpg
+.pi/
 
 # Google Earth Engine
 .config/earthengine/
