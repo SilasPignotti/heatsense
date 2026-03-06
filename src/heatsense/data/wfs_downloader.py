@@ -4,11 +4,6 @@ Web Feature Service (WFS) data downloader for geospatial boundaries.
 This module provides functionality to download geospatial boundary data from
 WFS endpoints with automatic retry logic and error handling. Commonly used for
 administrative boundaries and reference datasets.
-
-Dependencies:
-    - requests: HTTP client for WFS requests
-    - geopandas: Geospatial data processing
-    - xml.etree.ElementTree: XML parsing for error detection
 """
 
 import logging

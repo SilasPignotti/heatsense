@@ -5,21 +5,6 @@ This module provides the core analysis engine for comprehensive Urban Heat Islan
 research. Integrates satellite temperature data with land use information to
 identify thermal hotspots, analyze spatial patterns, and generate mitigation
 recommendations for urban planning applications.
-
-Key features:
-    - Landsat thermal band analysis via Google Earth Engine
-    - Statistical correlation with land use categories
-    - Spatial hotspot detection and clustering
-    - Ground validation with meteorological data
-    - Automated mitigation strategy recommendations
-
-Dependencies:
-    - ee: Google Earth Engine Python API for satellite data
-    - geopandas: Geospatial data operations and analysis
-    - numpy/pandas: Numerical computing and data manipulation
-    - libpysal/esda: Spatial statistics and autocorrelation
-    - scipy: Statistical analysis and correlations
-    - shapely: Geometric operations and spatial queries
 """
 
 import logging
@@ -57,14 +42,6 @@ class UrbanHeatIslandAnalyzer:
     Integrates with Google Earth Engine for satellite data processing and advanced
     spatial statistics for pattern analysis.
 
-    Key capabilities:
-    - Landsat thermal band analysis via Google Earth Engine
-    - Statistical correlation with CORINE land use categories
-    - Spatial hotspot detection and clustering algorithms
-    - Ground validation with meteorological station data
-    - Automated mitigation strategy recommendations
-    - Multi-temporal trend analysis and visualization
-
     Performance modes:
     - Preview: Fast analysis for initial insights (<30s)
     - Fast: Balanced performance for most applications (30-60s)
@@ -91,7 +68,6 @@ class UrbanHeatIslandAnalyzer:
         log_file: Path | None = None,
         logger: logging.Logger | None = None,
     ):
-        """Initialize the Urban Heat Island analyzer with specified configuration."""
         self.cloud_threshold = cloud_cover_threshold
         self.grid_cell_size = grid_cell_size
         self.hotspot_threshold = hotspot_threshold

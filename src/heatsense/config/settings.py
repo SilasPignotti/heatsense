@@ -4,9 +4,6 @@ Configuration settings for HeatSense Urban Heat Island analysis.
 This module provides centralized configuration for coordinate reference systems,
 data source endpoints, performance parameters, and external service settings.
 All environment-dependent settings are loaded from environment variables.
-
-Dependencies:
-    - dotenv: Environment variable loading (optional)
 """
 
 import os

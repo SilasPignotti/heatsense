@@ -2,14 +2,8 @@
 Data processing utilities for Urban Heat Island analysis.
 
 This module provides specialized functions for processing geospatial data
-in the context of Urban Heat Island (UHI) research. Key features include:
-- CORINE Land Cover data transformation for UHI categorization
-- Weather station data standardization and enhancement
-- Imperviousness coefficient mapping for thermal analysis
-
-Dependencies:
-    - geopandas: Geospatial data operations
-    - logging: Standardized logging functionality
+in the context of Urban Heat Island (UHI) research, including CORINE land cover
+transformation, weather station standardization, and imperviousness mapping.
 """
 
 import logging

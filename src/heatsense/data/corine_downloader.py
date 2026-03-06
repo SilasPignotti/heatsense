@@ -4,11 +4,6 @@ CORINE Land Cover data downloader for Urban Heat Island analysis.
 This module provides functionality to download CORINE Land Cover data from the
 European Environment Agency's ArcGIS REST services. Supports flexible date/period
 input and automatic coordinate system transformations.
-
-Dependencies:
-    - requests: HTTP client for API calls
-    - geopandas: Geospatial data handling
-    - pyproj: Coordinate reference system transformations
 """
 
 import logging

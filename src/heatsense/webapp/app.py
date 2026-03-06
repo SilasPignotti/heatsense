@@ -5,10 +5,6 @@ HeatSense web application - Flask interface for Urban Heat Island analysis.
 This module provides a web-based interface for conducting UHI analysis with
 interactive forms, real-time progress tracking, and comprehensive result
 visualization. Built with Flask and modern web technologies.
-
-Dependencies:
-    - flask: Web framework
-    - flask_cors: Cross-origin resource sharing support
 """
 
 import logging

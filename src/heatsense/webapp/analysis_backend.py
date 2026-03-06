@@ -5,13 +5,6 @@ Urban Heat Island analysis backend API.
 This module provides the backend foundation for UHI analysis applications with
 structured JSON output, comprehensive error handling, and multiple performance
 modes for different analysis requirements.
-
-Dependencies:
-    - geopandas: Geospatial data processing
-    - numpy/pandas: Numerical analysis
-    - heatsense.data: Data acquisition modules
-    - heatsense.utils: Data processing utilities
-    - heatsense.config: Configuration settings
 """
 
 import json
@@ -44,13 +37,6 @@ class UHIAnalysisBackend:
     Provides a high-level interface for performing comprehensive UHI analysis
     with configurable performance modes, structured result formatting, and
     integrated error handling for web applications.
-
-    Key features:
-    - Multiple performance modes (preview, fast, standard, detailed)
-    - Automatic data acquisition from multiple sources
-    - Structured JSON output with comprehensive metadata
-    - Progress tracking and performance metrics
-    - Robust error handling and validation
 
     Args:
         log_level: Logging verbosity level (DEBUG, INFO, WARNING, ERROR)

@@ -4,11 +4,6 @@ German Weather Service (DWD) data downloader for Urban Heat Island analysis.
 This module provides functionality to download weather station data from the
 German Weather Service using the wetterdienst library. Supports spatial buffering,
 temperature interpolation, and flexible geometry input formats.
-
-Dependencies:
-    - wetterdienst: German Weather Service API client
-    - geopandas: Geospatial data handling
-    - scipy: Spatial interpolation algorithms
 """
 
 import json
@@ -210,9 +205,7 @@ class DWDDataDownloader:
 
         return result_gdf
 
-    def _get_stations_in_area(
-        self, geometry: Point | Polygon | MultiPolygon
-    ) -> gpd.GeoDataFrame:
+    def _get_stations_in_area(self, geometry: Point | Polygon | MultiPolygon) -> gpd.GeoDataFrame:
         """Find all weather stations within buffered study area."""
         # Apply spatial buffer in projected coordinates
         if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
