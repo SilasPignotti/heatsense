@@ -33,8 +33,8 @@ A comprehensive tool for analyzing urban heat island effects using satellite ima
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/HeatSense.git
-cd HeatSense
+git clone https://github.com/silas-workspace/heatsense.git
+cd heatsense
 
 # Install dependencies with uv
 uv sync
@@ -51,8 +51,8 @@ cp .env.example .env
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/HeatSense.git
-cd HeatSense
+git clone https://github.com/silas-workspace/heatsense.git
+cd heatsense
 
 # Create virtual environment
 python -m venv .venv
@@ -78,7 +78,7 @@ uv run python run_webapp.py
 python run_webapp.py
 ```
 
-Open your browser to **http://localhost:8000** 🎉
+Open your browser to **http://localhost:8000**
 
 ### Command Line Analysis
 
@@ -96,7 +96,7 @@ uv run python run_analysis.py --area "Mitte" --start-date 2023-07-15 --end-date 
 ### Programmatic Usage
 
 ```python
-from src.heatsense.webapp.analysis_backend import UHIAnalysisBackend
+from heatsense.webapp.analysis_backend import UHIAnalysisBackend
 
 # Initialize backend
 backend = UHIAnalysisBackend()
@@ -180,6 +180,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Issues & Support
 
-Found a bug or need help? Please [open an issue](https://github.com/your-username/HeatSense/issues) on GitHub.
+Found a bug or need help? Please [open an issue](https://github.com/silas-workspace/heatsense/issues) on GitHub.
 
 ---
