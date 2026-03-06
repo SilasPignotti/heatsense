@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "HeatSense - Urban Heat Island Analyzer for climate research and heat mitigation planning"
 readme = "README.md"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Silas Pignotti", email = "pignottisilas@gmail.com"}
 ]
 license = {text = "MIT"}
 keywords = ["urban", "heat", "island", "climate", "satellite", "analysis"]
@@ -74,10 +74,10 @@ heatsense-webapp = "heatsense.webapp.run_webapp:main"
 heatsense-cli = "heatsense.webapp.analysis_backend:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/HeatSense"
-Repository = "https://github.com/your-username/HeatSense.git"
-Documentation = "https://github.com/your-username/HeatSense/docs"
-"Bug Reports" = "https://github.com/your-username/HeatSense/issues"
+Homepage = "https://github.com/silas-workspace/heatsense"
+Repository = "https://github.com/silas-workspace/heatsense.git"
+Documentation = "https://github.com/silas-workspace/heatsense/tree/main/docs"
+"Bug Reports" = "https://github.com/silas-workspace/heatsense/issues"
 
 [tool.ruff]
 target-version = "py311"
